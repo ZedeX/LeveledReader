@@ -47,23 +47,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | TBD | Pending |
-| SETUP-02 | TBD | Pending |
-| SETUP-03 | TBD | Pending |
-| CAPT-01 | TBD | Pending |
-| CAPT-02 | TBD | Pending |
-| CAPT-03 | TBD | Pending |
-| CAPT-04 | TBD | Pending |
-| REUSE-01 | TBD | Pending |
-| REUSE-02 | TBD | Pending |
-| REUSE-03 | TBD | Pending |
-| DEV-01 | TBD | Pending |
-| DEV-02 | TBD | Pending |
+| SETUP-01 | Phase 1 | Pending |
+| SETUP-02 | Phase 1 | Pending |
+| SETUP-03 | Phase 1 | Pending |
+| DEV-02 | Phase 1 | Pending |
+| CAPT-01 | Phase 2 | Pending |
+| CAPT-02 | Phase 2 | Pending |
+| CAPT-03 | Phase 2 | Pending |
+| CAPT-04 | Phase 2 | Pending |
+| REUSE-01 | Phase 3 | Pending |
+| REUSE-02 | Phase 3 | Pending |
+| REUSE-03 | Phase 3 | Pending |
+| DEV-01 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 12 total
-- Mapped to phases: 0
-- Unmapped: 12 ⚠️
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-29*
