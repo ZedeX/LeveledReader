@@ -38,53 +38,37 @@ export class KidsAZScraper {
     console.log('');
     console.log('请在浏览器中:');
     console.log('  1. 手动导航到包含书籍列表的页面');
-    console.log('  2. 确保能看到所有要采集的书籍');
+    console.log('  2. 确保能看到 <student-resource-grid>');
     console.log('  3. 在此终端按回车键开始采集');
     console.log('');
 
     // 等待用户按回车
     await this.waitForEnter();
 
-    // 解析书籍列表
-    const books = await this.parser.parseBookList();
+    // 解析书籍列表（只获取数量，不获取详细信息）
+    console.log('► 解析书籍列表...');
+    const bookCount = await this.getBookCountFromGrid();
 
-    if (books.length === 0) {
+    if (bookCount === 0) {
       console.log('⚠ 未找到书籍，请确保在正确的页面');
       return;
     }
 
-    console.log('');
-    console.log(`找到 ${books.length} 个链接，开始筛选书籍...`);
-
-    // 过滤书籍（排除明显不是书籍的链接）
-    const filteredBooks = books.filter(book => {
-      const title = book.title.toLowerCase();
-      const url = book.url.toLowerCase();
-      // 排除明显不是书籍的
-      const excludeKeywords = ['log out', 'logout', 'parents', 'home', 'settings', 'help', 'profile'];
-      return !excludeKeywords.some(keyword => title.includes(keyword) || url.includes(keyword));
-    });
-
-    console.log(`筛选后剩余 ${filteredBooks.length} 本书`);
+    console.log(`✓ 找到 ${bookCount} 本书`);
     console.log('');
 
-    if (filteredBooks.length === 0) {
-      console.log('⚠ 未找到有效的书籍，请手动检查页面');
-      return;
-    }
+    for (let i = 0; i < bookCount; i++) {
+      const bookId = `book-${String(i + 1).padStart(3, '0')}`;
+      console.log(`━━━ 书籍 ${i + 1}/${bookCount} ━━━`);
 
-    for (let i = 0; i < filteredBooks.length; i++) {
-      const book = filteredBooks[i];
-      console.log(`━━━ 书籍 ${i + 1}/${filteredBooks.length}: ${book.title} ━━━`);
-
-      if (this.storage.bookExists(book.id)) {
+      if (this.storage.bookExists(bookId)) {
         console.log(`  跳过（已存在）`);
         console.log('');
         continue;
       }
 
       try {
-        await this.scrapeSingleBook(book);
+        await this.scrapeSingleBook(i, bookId);
       } catch (error) {
         console.error(`  ✗ 采集失败:`, error);
       }
@@ -95,6 +79,15 @@ export class KidsAZScraper {
     console.log('========================================');
     console.log('  采集完成！');
     console.log('========================================');
+  }
+
+  private async getBookCountFromGrid(): Promise<number> {
+    return await this.browser.getPage().evaluate(() => {
+      const grid = document.querySelector('student-resource-grid');
+      if (!grid) return 0;
+      const cards = grid.querySelectorAll('[class*="card"], [class*="book"]');
+      return cards.length;
+    });
   }
 
   private async waitForEnter(): Promise<void> {
@@ -110,72 +103,99 @@ export class KidsAZScraper {
     });
   }
 
-  private async scrapeSingleBook(book: BookListItem): Promise<void> {
-    this.storage.ensureBookDirs(book.id);
-
-    // 导航到书籍页面
-    console.log(`  导航到书籍页面...`);
-    try {
-      await this.browser.navigate(book.url, 'domcontentloaded');
-    } catch {
-      console.log(`  ⚠ 导航超时，继续...`);
-    }
-    await this.browser.sleep(3000);
+  private async scrapeSingleBook(bookIndex: number, bookId: string): Promise<void> {
+    this.storage.ensureBookDirs(bookId);
 
     const pages: BookPage[] = [];
     const allAudioFiles: string[] = [];
+    let bookTitle = bookId;
 
-    // 采集封面
-    console.log(`  采集封面...`);
-    const coverImages = await this.parser.extractImages();
-    let coverPath: string | undefined;
-    if (coverImages.length > 0) {
-      coverPath = this.storage.getCoverPath(book.id);
-      await this.downloader.downloadImage(this.browser.getPage(), coverImages[0], coverPath);
-    }
+    try {
+      // 步骤1: 点击书籍卡片
+      console.log(`  点击书籍卡片...`);
+      const clicked = await this.parser.clickBookCard(bookIndex);
+      if (!clicked) {
+        console.log(`  ⚠ 无法点击书籍`);
+        return;
+      }
 
-    // 翻页采集
-    let currentPage = 1;
-    let hasMorePages = true;
-
-    while (hasMorePages && currentPage <= 50) {
-      console.log(`  采集第 ${currentPage} 页...`);
-
+      // 步骤2: 等待弹出窗口
+      console.log(`  等待弹出窗口...`);
+      await this.parser.waitForPopup();
       await this.browser.sleep(2000);
 
-      // 采集当前页
-      const pageData = await this.scrapePage(book.id, currentPage);
-      pages.push(pageData);
-
-      // 收集音频
-      if (pageData.audioFiles) {
-        allAudioFiles.push(...pageData.audioFiles);
+      // 步骤3: 点击第一个 delivery 链接（听的图标）
+      console.log(`  点击听的图标...`);
+      const deliveryClicked = await this.parser.clickFirstDeliveryLink();
+      if (!deliveryClicked) {
+        console.log(`  ⚠ 无法点击 delivery 链接`);
+        await this.parser.closePopup();
+        return;
       }
 
-      // 尝试翻页
-      hasMorePages = await this.parser.clickNextPage();
-      if (hasMorePages) {
-        currentPage++;
+      // 步骤4: 等待书籍阅读窗口
+      console.log(`  等待书籍阅读窗口...`);
+      await this.parser.waitForBookReader();
+      await this.browser.sleep(3000);
+
+      // 获取总页数
+      const totalPages = await this.parser.getTotalPages();
+      console.log(`  共 ${totalPages} 页`);
+
+      // 采集封面（第一页）
+      console.log(`  采集第 1 页...`);
+      const firstPageData = await this.scrapePage(bookId, 1);
+      pages.push(firstPageData);
+      if (firstPageData.audioFiles) {
+        allAudioFiles.push(...firstPageData.audioFiles);
+      }
+
+      // 保存封面引用
+      const coverPath = firstPageData.image;
+
+      // 翻页采集剩余页
+      for (let currentPage = 2; currentPage <= Math.min(totalPages, 30); currentPage++) {
+        console.log(`  采集第 ${currentPage} 页...`);
+
+        // 翻页
+        const hasNext = await this.parser.goToNextPage();
+        if (!hasNext) {
+          console.log(`  没有下一页了`);
+          break;
+        }
+
         await this.browser.sleep(1500);
+
+        // 采集当前页
+        const pageData = await this.scrapePage(bookId, currentPage);
+        pages.push(pageData);
+        if (pageData.audioFiles) {
+          allAudioFiles.push(...pageData.audioFiles);
+        }
       }
+
+      // 保存书籍信息
+      const bookInfo: BookInfo = {
+        id: bookId,
+        title: bookTitle,
+        level: 'L',
+        collectionId: '1',
+        url: '',
+        coverImage: coverPath,
+        pageCount: pages.length,
+        pages,
+        audioFiles: [...new Set(allAudioFiles)].map(f => path.basename(f)),
+        collectedAt: new Date().toISOString()
+      };
+
+      this.storage.saveBookInfo(bookId, bookInfo);
+      console.log(`  ✓ 保存完成: ${bookInfo.pageCount} 页`);
+
+    } finally {
+      // 关闭弹出窗口，准备下一本
+      await this.parser.closePopup();
+      await this.browser.sleep(1000);
     }
-
-    // 保存书籍信息
-    const bookInfo: BookInfo = {
-      id: book.id,
-      title: book.title,
-      level: 'L',
-      collectionId: '1',
-      url: book.url,
-      coverImage: coverPath ? path.basename(coverPath) : undefined,
-      pageCount: pages.length,
-      pages,
-      audioFiles: [...new Set(allAudioFiles)].map(f => path.basename(f)),
-      collectedAt: new Date().toISOString()
-    };
-
-    this.storage.saveBookInfo(book.id, bookInfo);
-    console.log(`  ✓ 保存完成: ${bookInfo.pageCount} 页`);
   }
 
   private async scrapePage(bookId: string, pageNum: number): Promise<BookPage> {
@@ -187,20 +207,39 @@ export class KidsAZScraper {
     result.image = path.basename(imagePath);
 
     // 提取文字
-    const text = await this.parser.extractPageText();
+    const text = await this.parser.extractCurrentPageText();
     if (text) {
       result.text = text;
       this.storage.savePageText(bookId, pageNum, text);
     }
 
+    // 提取图片（除了截图，也下载 img 标签的图片）
+    const images = await this.parser.extractCurrentPageImages();
+    if (images.length > 0) {
+      for (let i = 0; i < Math.min(images.length, 3); i++) {
+        const imgExt = images[i].split('.').pop() || 'jpg';
+        const imgPath = this.storage.getPageImagePath(bookId, pageNum, imgExt);
+        try {
+          await this.downloader.downloadImage(this.browser.getPage(), images[i], imgPath);
+        } catch {
+          // 忽略下载错误
+        }
+      }
+    }
+
     // 提取音频
-    const audioUrls = await this.parser.extractAudioUrls();
+    const audioUrls = await this.parser.extractCurrentPageAudio();
     if (audioUrls.length > 0) {
       result.audioFiles = [];
       for (let i = 0; i < audioUrls.length; i++) {
-        const audioPath = this.storage.getPageAudioPath(bookId, pageNum, i);
-        await this.downloader.downloadAudio(this.browser.getPage(), audioUrls[i], audioPath);
-        result.audioFiles.push(path.basename(audioPath));
+        const audioExt = audioUrls[i].split('.').pop() || 'mp3';
+        const audioPath = this.storage.getPageAudioPath(bookId, pageNum, i, audioExt);
+        try {
+          await this.downloader.downloadAudio(this.browser.getPage(), audioUrls[i], audioPath);
+          result.audioFiles.push(path.basename(audioPath));
+        } catch {
+          // 忽略下载错误
+        }
       }
     }
 

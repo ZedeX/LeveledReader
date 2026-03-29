@@ -1,4 +1,4 @@
-import { Page } from 'playwright';
+import { Page, Locator } from 'playwright';
 import { BookListItem } from '../types';
 
 export class PageParser {
@@ -14,45 +14,40 @@ export class PageParser {
     const books: BookListItem[] = await this.page.evaluate(() => {
       const items: BookListItem[] = [];
 
-      // 尝试多种选择器模式
-      const selectors = [
-        'a.book-item',
-        'a[href*="book"]',
-        '.book-list a',
-        '.collection-item a',
-        '[class*="book"] a'
-      ];
+      // 查找 student-resource-grid
+      const grid = document.querySelector('student-resource-grid');
+      if (!grid) {
+        console.log('未找到 student-resource-grid');
+        return items;
+      }
 
-      for (const selector of selectors) {
-        const elements = document.querySelectorAll(selector);
-        if (elements.length > 0) {
-          elements.forEach((el, index) => {
-            const anchor = el as HTMLAnchorElement;
-            const title = anchor.textContent?.trim() || `Book ${index + 1}`;
-            const url = anchor.href;
-            if (url && url.includes('http')) {
-              const id = `book-${Date.now()}-${index}`;
-              items.push({ id, title, url });
-            }
-          });
-          break;
+      // 查找所有书籍卡片
+      const cards = grid.querySelectorAll('[class*="card"], [class*="book"]');
+
+      cards.forEach((card, index) => {
+        // 找封面图容器 card_imageWrapper
+        const imageWrapper = card.querySelector('[class*="card_imageWrapper"], [class*="imageWrapper"]');
+        // 找标题容器 card_detailsContainer
+        const detailsContainer = card.querySelector('[class*="card_detailsContainer"], [class*="detailsContainer"]');
+
+        let title = `Book ${index + 1}`;
+        if (detailsContainer) {
+          title = detailsContainer.textContent?.trim() || title;
         }
-      }
 
-      // 如果没找到，尝试所有链接
-      if (items.length === 0) {
-        const allLinks = document.querySelectorAll('a');
-        allLinks.forEach((el, index) => {
-          const anchor = el as HTMLAnchorElement;
-          const href = anchor.href;
-          const text = anchor.textContent?.trim() || '';
-          // 过滤出看起来像书籍的链接
-          if (href && (text.length > 0 && text.length < 100)) {
-            const id = `book-${Date.now()}-${index}`;
-            items.push({ id, title: text, url: href });
-          }
-        });
-      }
+        // 查找点击元素（封面图或链接）
+        const clickElement = imageWrapper || card.querySelector('a, img, button');
+
+        if (clickElement) {
+          const id = `book-${Date.now()}-${index}`;
+          // 存储元素的引用方式（通过索引）
+          items.push({
+            id,
+            title,
+            url: '' // URL 后面通过点击获取
+          });
+        }
+      });
 
       return items;
     });
@@ -61,16 +56,101 @@ export class PageParser {
     return books;
   }
 
-  async extractPageText(): Promise<string> {
+  async clickBookCard(index: number): Promise<boolean> {
+    try {
+      const grid = this.page.locator('student-resource-grid').first();
+      await grid.waitFor({ state: 'visible', timeout: 10000 });
+
+      const cards = grid.locator('[class*="card"], [class*="book"]');
+      const count = await cards.count();
+
+      if (index >= count) {
+        console.log(`  ⚠ 索引 ${index} 超出范围，只有 ${count} 个卡片`);
+        return false;
+      }
+
+      const card = cards.nth(index);
+      await card.scrollIntoViewIfNeeded();
+      await card.click({ timeout: 10000 });
+      console.log(`  ✓ 点击了第 ${index + 1} 本书`);
+      return true;
+    } catch (error) {
+      console.log(`  ⚠ 点击书籍失败:`, error);
+      return false;
+    }
+  }
+
+  async waitForPopup(): Promise<boolean> {
+    try {
+      // 等待弹出窗口出现
+      await this.page.waitForSelector('student-resource-delivery, [class*="popup"], [class*="modal"], [role="dialog"]', { timeout: 10000 });
+      console.log(`  ✓ 弹出窗口已出现`);
+      return true;
+    } catch {
+      console.log(`  ⚠ 等待弹出窗口超时`);
+      return false;
+    }
+  }
+
+  async clickFirstDeliveryLink(): Promise<boolean> {
+    try {
+      // 查找 student-resource-delivery 中的第一个链接（听的图标）
+      const delivery = this.page.locator('student-resource-delivery').first();
+      await delivery.waitFor({ state: 'visible', timeout: 10000 });
+
+      // 查找第一个链接/按钮（听的图标）
+      const links = delivery.locator('a, button, [role="button"]');
+      const count = await links.count();
+
+      if (count === 0) {
+        console.log(`  ⚠ 未找到 delivery 链接`);
+        return false;
+      }
+
+      const firstLink = links.first();
+      await firstLink.scrollIntoViewIfNeeded();
+      await firstLink.click({ timeout: 10000 });
+      console.log(`  ✓ 点击了第一个 delivery 链接（听的图标）`);
+      return true;
+    } catch (error) {
+      console.log(`  ⚠ 点击 delivery 链接失败:`, error);
+      return false;
+    }
+  }
+
+  async waitForBookReader(): Promise<boolean> {
+    try {
+      // 等待书籍阅读窗口出现
+      await this.page.waitForTimeout(2000);
+      console.log(`  ✓ 书籍阅读窗口已打开`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async getTotalPages(): Promise<number> {
+    try {
+      // 尝试查找页码信息
+      const pageInfo = await this.page.evaluate(() => {
+        const pageElements = document.querySelectorAll('[class*="page"], [aria-label*="page"]');
+        if (pageElements.length > 0) {
+          return pageElements.length;
+        }
+        // 默认返回 1
+        return 1;
+      });
+      return Math.min(pageInfo, 30); // 最多30页
+    } catch {
+      return 1;
+    }
+  }
+
+  async extractCurrentPageText(): Promise<string> {
     return await this.page.evaluate(() => {
-      // 尝试获取页面文本
       const textSelectors = [
-        '.page-text',
-        '.book-text',
-        '.story-text',
-        'article',
-        'main',
-        '.content'
+        '[class*="page-text"], [class*="book-text"], [class*="story-text"]',
+        'article, main, .content'
       ];
 
       for (const selector of textSelectors) {
@@ -80,12 +160,11 @@ export class PageParser {
         }
       }
 
-      //  fallback: 获取 body 文本
       return document.body.textContent?.trim() || '';
     });
   }
 
-  async extractImages(): Promise<string[]> {
+  async extractCurrentPageImages(): Promise<string[]> {
     return await this.page.evaluate(() => {
       const images: string[] = [];
       const imgElements = document.querySelectorAll('img');
@@ -98,7 +177,7 @@ export class PageParser {
     });
   }
 
-  async extractAudioUrls(): Promise<string[]> {
+  async extractCurrentPageAudio(): Promise<string[]> {
     return await this.page.evaluate(() => {
       const audios: string[] = [];
 
@@ -116,7 +195,7 @@ export class PageParser {
         });
       });
 
-      // 查找包含 audio/mp3 的链接
+      // 查找音频链接
       const links = document.querySelectorAll('a');
       links.forEach(link => {
         const href = link.href;
@@ -125,58 +204,63 @@ export class PageParser {
         }
       });
 
-      // 查找 data 属性中的音频
-      const allElements = document.querySelectorAll('[data-audio], [data-mp3], [data-src*="mp3"]');
-      allElements.forEach(el => {
-        const audioUrl = el.getAttribute('data-audio') || el.getAttribute('data-mp3') || el.getAttribute('data-src');
-        if (audioUrl && audioUrl.startsWith('http')) {
-          audios.push(audioUrl);
-        }
-      });
-
-      return [...new Set(audios)]; // 去重
+      return [...new Set(audios)];
     });
   }
 
-  async findNextPageButton(): Promise<boolean> {
-    return await this.page.evaluate(() => {
+  async goToNextPage(): Promise<boolean> {
+    try {
       const nextSelectors = [
-        'button.next',
-        '.next-button',
-        'a.next',
+        'button.next', '.next-button', 'a.next',
         '[aria-label*="next"], [aria-label*="Next"]',
-        'button:has-text("Next"), button:has-text("next")'
+        'button:has-text(">"), button:has-text("→")'
       ];
 
       for (const selector of nextSelectors) {
-        const el = document.querySelector(selector);
-        if (el) {
-          return true;
+        try {
+          const element = this.page.locator(selector).first();
+          if (await element.isVisible({ timeout: 2000 })) {
+            await element.click({ timeout: 5000 });
+            await this.page.waitForTimeout(1500);
+            return true;
+          }
+        } catch {
+          continue;
         }
       }
+
       return false;
-    });
+    } catch {
+      return false;
+    }
   }
 
-  async clickNextPage(): Promise<boolean> {
-    const nextSelectors = [
-      'button.next',
-      '.next-button',
-      'a.next',
-      '[aria-label*="next"], [aria-label*="Next"]'
-    ];
+  async closePopup(): Promise<void> {
+    try {
+      const closeSelectors = [
+        'button.close', '.close-button', 'a.close',
+        '[aria-label*="close"], [aria-label*="Close"]',
+        'button:has-text("×"), button:has-text("X")'
+      ];
 
-    for (const selector of nextSelectors) {
-      try {
-        const element = this.page.locator(selector).first();
-        if (await element.isVisible({ timeout: 2000 })) {
-          await element.click();
-          return true;
+      for (const selector of closeSelectors) {
+        try {
+          const element = this.page.locator(selector).first();
+          if (await element.isVisible({ timeout: 1000 })) {
+            await element.click({ timeout: 2000 });
+            await this.page.waitForTimeout(1000);
+            return;
+          }
+        } catch {
+          continue;
         }
-      } catch {
-        continue;
       }
+
+      // 按 ESC 键
+      await this.page.keyboard.press('Escape');
+      await this.page.waitForTimeout(500);
+    } catch {
+      // 忽略关闭错误
     }
-    return false;
   }
 }
