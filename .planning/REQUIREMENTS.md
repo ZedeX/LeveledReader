@@ -6,24 +6,24 @@
 ## v1 Requirements
 
 ### Setup
-- [ ] **SETUP-01**: 项目初始化（package.json, tsconfig.json）
-- [ ] **SETUP-02**: Playwright 依赖安装和浏览器下载
-- [ ] **SETUP-03**: TypeScript 开发环境配置
+- [x] **SETUP-01**: 项目初始化（package.json, tsconfig.json）
+- [x] **SETUP-02**: Playwright 依赖安装和浏览器下载
+- [x] **SETUP-03**: TypeScript 开发环境配置
 
 ### Cookie Capture
-- [ ] **CAPT-01**: 启动非无头模式 Chromium 浏览器
-- [ ] **CAPT-02**: 监听 F12 全局快捷键
-- [ ] **CAPT-03**: 按 F12 时捕获当前页面所有 cookies
-- [ ] **CAPT-04**: 将 cookies 保存为 cookies.json 文件
+- [x] **CAPT-01**: 启动非无头模式 Chromium 浏览器
+- [x] **CAPT-02**: 监听 F12 全局快捷键
+- [x] **CAPT-03**: 按 F12 时捕获当前页面所有 cookies
+- [x] **CAPT-04**: 将 cookies 保存为 cookies.json 文件
 
 ### Cookie Reuse
-- [ ] **REUSE-01**: 提供示例脚本展示如何加载 cookies
-- [ ] **REUSE-02**: 加载 cookies 后自动设置到浏览器上下文
-- [ ] **REUSE-03**: 验证 cookies 有效（页面显示登录状态）
+- [x] **REUSE-01**: 提供示例脚本展示如何加载 cookies
+- [x] **REUSE-02**: 加载 cookies 后自动设置到浏览器上下文
+- [x] **REUSE-03**: 验证 cookies 有效（页面显示登录状态）
 
 ### Developer Experience
-- [ ] **DEV-01**: 清晰的 README 使用说明
-- [ ] **DEV-02**: npm scripts 简化常用操作
+- [x] **DEV-01**: 清晰的 README 使用说明
+- [x] **DEV-02**: npm scripts 简化常用操作
 
 ## v2 Requirements
 
@@ -47,18 +47,18 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SETUP-01 | Phase 1 | Pending |
-| SETUP-02 | Phase 1 | Pending |
-| SETUP-03 | Phase 1 | Pending |
-| DEV-02 | Phase 1 | Pending |
-| CAPT-01 | Phase 2 | Pending |
-| CAPT-02 | Phase 2 | Pending |
-| CAPT-03 | Phase 2 | Pending |
-| CAPT-04 | Phase 2 | Pending |
-| REUSE-01 | Phase 3 | Pending |
-| REUSE-02 | Phase 3 | Pending |
-| REUSE-03 | Phase 3 | Pending |
-| DEV-01 | Phase 4 | Pending |
+| SETUP-01 | Phase 1 | ✓ Complete |
+| SETUP-02 | Phase 1 | ✓ Complete |
+| SETUP-03 | Phase 1 | ✓ Complete |
+| DEV-02 | Phase 1 | ✓ Complete |
+| CAPT-01 | Phase 2 | ✓ Complete |
+| CAPT-02 | Phase 2 | ✓ Complete |
+| CAPT-03 | Phase 2 | ✓ Complete |
+| CAPT-04 | Phase 2 | ✓ Complete |
+| REUSE-01 | Phase 3 | ✓ Complete |
+| REUSE-02 | Phase 3 | ✓ Complete |
+| REUSE-03 | Phase 3 | ✓ Complete |
+| DEV-01 | Phase 4 | ✓ Complete |
 
 **Coverage:**
 - v1 requirements: 12 total
@@ -67,4 +67,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-03-29*
-*Last updated: 2026-03-29 after initial definition*
+*Last updated: 2026-03-29 after project completion*
