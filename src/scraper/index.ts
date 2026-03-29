@@ -4,6 +4,7 @@ import { Downloader } from './downloader';
 import { Storage } from './storage';
 import { BookInfo, BookPage, ScraperConfig, BookListItem } from '../types';
 import * as path from 'path';
+import * as readline from 'readline';
 
 export class KidsAZScraper {
   private config: ScraperConfig;
@@ -35,26 +36,46 @@ export class KidsAZScraper {
     console.log('  KidsA-Z Book Scraper');
     console.log('========================================');
     console.log('');
+    console.log('请在浏览器中:');
+    console.log('  1. 手动导航到包含书籍列表的页面');
+    console.log('  2. 确保能看到所有要采集的书籍');
+    console.log('  3. 在此终端按回车键开始采集');
+    console.log('');
 
-    // 导航到起始页面
-    await this.browser.navigate(this.config.startUrl);
-    await this.browser.sleep(3000);
+    // 等待用户按回车
+    await this.waitForEnter();
 
     // 解析书籍列表
     const books = await this.parser.parseBookList();
 
     if (books.length === 0) {
-      console.log('⚠ 未找到书籍，请确保已登录并在正确的页面');
+      console.log('⚠ 未找到书籍，请确保在正确的页面');
       return;
     }
 
     console.log('');
-    console.log(`开始采集 ${books.length} 本书...`);
+    console.log(`找到 ${books.length} 个链接，开始筛选书籍...`);
+
+    // 过滤书籍（排除明显不是书籍的链接）
+    const filteredBooks = books.filter(book => {
+      const title = book.title.toLowerCase();
+      const url = book.url.toLowerCase();
+      // 排除明显不是书籍的
+      const excludeKeywords = ['log out', 'logout', 'parents', 'home', 'settings', 'help', 'profile'];
+      return !excludeKeywords.some(keyword => title.includes(keyword) || url.includes(keyword));
+    });
+
+    console.log(`筛选后剩余 ${filteredBooks.length} 本书`);
     console.log('');
 
-    for (let i = 0; i < books.length; i++) {
-      const book = books[i];
-      console.log(`━━━ 书籍 ${i + 1}/${books.length}: ${book.title} ━━━`);
+    if (filteredBooks.length === 0) {
+      console.log('⚠ 未找到有效的书籍，请手动检查页面');
+      return;
+    }
+
+    for (let i = 0; i < filteredBooks.length; i++) {
+      const book = filteredBooks[i];
+      console.log(`━━━ 书籍 ${i + 1}/${filteredBooks.length}: ${book.title} ━━━`);
 
       if (this.storage.bookExists(book.id)) {
         console.log(`  跳过（已存在）`);
@@ -74,6 +95,19 @@ export class KidsAZScraper {
     console.log('========================================');
     console.log('  采集完成！');
     console.log('========================================');
+  }
+
+  private async waitForEnter(): Promise<void> {
+    return new Promise(resolve => {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+      rl.question('', () => {
+        rl.close();
+        resolve();
+      });
+    });
   }
 
   private async scrapeSingleBook(book: BookListItem): Promise<void> {
