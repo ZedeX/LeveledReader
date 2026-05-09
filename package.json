@@ -1,16 +1,18 @@
 {
-  "name": "kids-a-z",
+  "name": "kids-a-z-scraper",
   "version": "1.0.0",
-  "description": "",
+  "description": "KidsA-Z student data scraper with password probing",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx src/capture.ts",
-    "build": "tsc",
-    "capture": "tsx src/capture.ts",
-    "example": "tsx src/example.ts",
-    "scrape": "tsx src/scrape.ts"
+    "fetch-students": "tsx src/fetch-all-class-students.ts",
+    "probe": "tsx src/probe-multi-class.ts",
+    "probe-retry": "tsx src/retry-failed-3digit.ts",
+    "check-progress": "tsx src/check-progress.ts",
+    "fetch-missing": "tsx src/fetch-missing-data.ts",
+    "generate-report": "tsx src/generate-report.ts",
+    "clean-failed": "tsx src/clean-failed.ts"
   },
-  "keywords": [],
+  "keywords": ["kidsa-z", "scraper", "playwright"],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

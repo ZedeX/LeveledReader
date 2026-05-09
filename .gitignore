@@ -4,3 +4,8 @@ cookies.json
 data/
 .env
 .DS_Store
+*.log
+.planning/
+.claude/
+Thumbs.db
+*.bak.ts
