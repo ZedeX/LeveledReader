@@ -12,7 +12,11 @@
     "generate-report": "tsx src/generate-report.ts",
     "clean-failed": "tsx src/clean-failed.ts"
   },
-  "keywords": ["kidsa-z", "scraper", "playwright"],
+  "keywords": [
+    "kidsa-z",
+    "scraper",
+    "playwright"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
@@ -23,5 +27,9 @@
     "ts-node": "^10.9.2",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "@types/express": "^5.0.6",
+    "express": "^5.2.1"
   }
 }

@@ -1,11 +1,38 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
-cookies.json
-data/
+
+# Environment
 .env
 .DS_Store
+Thumbs.db
 *.log
+
+# IDE
 .planning/
 .claude/
-Thumbs.db
+
+# Backup files
 *.bak.ts
+
+# Sensitive data - DO NOT COMMIT
+data/probe/probe-results.json
+data/probe/probe-failed.json
+data/probe/probe-live.json
+data/cookies/
+data/download-progress-v2.json
+
+# Downloaded resources
+downloads/
+
+# Debug files
+debug-page.html
+scripts/sanitize-data.js
+
+# Keep these (public versions)
+!data/probe/probe-results.public.json
+!data/booklists/.gitkeep
+!data/cookies/.gitkeep
+!downloads/.gitkeep
