@@ -7,7 +7,7 @@ interface Env {
 
 const proxy = new Hono<{ Bindings: Env }>();
 
-// GET /api/proxy/cdn/* - Proxy RAZ CDN requests with Referer header
+// GET /api/proxy/cdn/* - Proxy CDN requests with Referer header
 proxy.get('/cdn/*', authMiddleware, async (c) => {
   const cdnPath = c.req.path.replace('/api/proxy/cdn/', '');
   const cdnUrl = `${c.env.RAZ_CDN_BASE}/${cdnPath}`;
@@ -15,8 +15,8 @@ proxy.get('/cdn/*', authMiddleware, async (c) => {
   try {
     const response = await fetch(cdnUrl, {
       headers: {
-        'Referer': 'https://www.kidsa-z.com/',
-        'Origin': 'https://www.kidsa-z.com',
+        'Referer': 'https://www.kidsa.com/',
+        'Origin': 'https://www.kidsa.com',
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
     });
