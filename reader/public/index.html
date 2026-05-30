@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>KidsA-Z Reader</title>
+<style>
+/* ========== Reset & Variables ========== */
+:root {
+  --raz-blue: #1b3a5c;
+  --raz-blue-light: #2a5f8f;
+  --raz-green: #4caf50;
+  --raz-green-dark: #388e3c;
+  --raz-orange: #ff9800;
+  --raz-bg: #eef2f7;
+  --raz-card-bg: #fff;
+  --raz-text: #333;
+  --raz-text-light: #777;
+  --raz-border: #dde3ea;
+  --raz-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  --raz-radius: 8px;
+  --nav-h: 60px;
+  --tab-h: 52px;
+  /* 大字体，保护孩子视力 */
+  --fs-base: 17px;
+  --fs-sm: 14px;
+  --fs-xs: 12px;
+  --fs-lg: 20px;
+  --fs-xl: 24px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--raz-bg); color: var(--raz-text); min-height: 100vh; overflow-x: hidden; font-size: var(--fs-base); }
+button { cursor: pointer; border: none; background: none; font-family: inherit; font-size: inherit; }
+img { display: block; }
+a { text-decoration: none; color: inherit; }
+
+/* ========== Navigation ========== */
+.top-nav {
+  position: sticky; top: 0; z-index: 100;
+  height: var(--nav-h);
+  background: linear-gradient(135deg, var(--raz-blue), var(--raz-blue-light));
+  display: flex; align-items: center; padding: 0 24px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.2);
+}
+.top-nav .logo {
+  display: flex; align-items: center; gap: 12px;
+  color: #fff; font-size: var(--fs-xl); font-weight: 700; letter-spacing: -0.3px;
+  cursor: pointer;
+}
+.top-nav .logo svg { width: 32px; height: 32px; }
+.top-nav .stats {
+  margin-left: auto; color: rgba(255,255,255,0.7); font-size: var(--fs-sm);
+}
+
+/* ========== Level Tabs ========== */
+.level-bar {
+  position: sticky; top: var(--nav-h); z-index: 90;
+  background: #fff; border-bottom: 2px solid var(--raz-border);
+  display: flex; align-items: center; height: var(--tab-h);
+  overflow-x: auto; padding: 0 20px; gap: 6px;
+  -webkit-overflow-scrolling: touch;
+}
+.level-bar::-webkit-scrollbar { height: 0; }
+.level-tab {
+  padding: 8px 20px; border-radius: 22px; font-size: var(--fs-sm); font-weight: 600;
+  color: #555; background: #f0f3f7; white-space: nowrap;
+  transition: all 0.2s;
+}
+.level-tab:hover { background: #d4e4f7; color: var(--raz-blue); }
+.level-tab.active { background: var(--raz-blue); color: #fff; }
+
+/* ========== Book Grid (Bookshelf) ========== */
+.bookshelf {
+  max-width: 1200px; margin: 0 auto; padding: 24px;
+}
+.shelf-section { margin-bottom: 28px; }
+.shelf-title {
+  font-size: var(--fs-lg); font-weight: 600; color: var(--raz-text-light);
+  margin-bottom: 14px; padding-left: 4px;
+  display: flex; align-items: center; gap: 10px;
+}
+.shelf-title .count {
+  background: var(--raz-blue); color: #fff; font-size: var(--fs-xs);
+  padding: 3px 10px; border-radius: 10px;
+}
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+  gap: 18px;
+}
+.book-card {
+  background: var(--raz-card-bg); border-radius: var(--raz-radius);
+  overflow: hidden; box-shadow: var(--raz-shadow);
+  cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+  position: relative;
+}
+.book-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.15); }
+.book-card .cover-wrap {
+  position: relative; width: 100%; aspect-ratio: 3/4;
+  background: linear-gradient(135deg, #e8edf3, #d0d8e4);
+  overflow: hidden;
+}
+.book-card .cover-wrap img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.book-card .level-badge {
+  position: absolute; top: 6px; left: 6px;
+  background: var(--raz-blue); color: #fff;
+  font-size: var(--fs-xs); font-weight: 700; padding: 3px 10px;
+  border-radius: 4px;
+}
+.book-card .audio-badge {
+  position: absolute; top: 6px; right: 6px;
+  background: var(--raz-green); color: #fff;
+  font-size: var(--fs-xs); font-weight: 600; padding: 3px 8px;
+  border-radius: 4px; display: flex; align-items: center; gap: 4px;
+}
+.book-card .audio-badge svg { width: 14px; height: 14px; }
+.book-card .book-info { padding: 10px 12px; }
+.book-card .book-title {
+  font-size: var(--fs-sm); font-weight: 600; line-height: 1.4;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.book-card .book-pages {
+  font-size: var(--fs-xs); color: var(--raz-text-light); margin-top: 4px;
+}
+
+/* ========== Reader Overlay ========== */
+.reader-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: #1a1a2e; display: none; flex-direction: column;
+}
+.reader-overlay.open { display: flex; }
+
+.reader-header {
+  height: 52px; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; padding: 0 20px; gap: 14px;
+  backdrop-filter: blur(8px);
+}
+.reader-close {
+  color: #fff; font-size: 26px; padding: 4px 10px; border-radius: 6px;
+  transition: background 0.2s;
+}
+.reader-close:hover { background: rgba(255,255,255,0.15); }
+.reader-title {
+  color: #fff; font-size: var(--fs-lg); font-weight: 600; flex: 1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reader-page-info { color: rgba(255,255,255,0.6); font-size: var(--fs-sm); font-weight: 500; }
+
+/* Reader body - book page display */
+.reader-body {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  position: relative; overflow: hidden; user-select: none;
+}
+.page-container {
+  position: relative; max-width: 90%; max-height: 90%;
+  transition: transform 0.3s ease;
+}
+.page-container img {
+  max-width: 100%; max-height: calc(100vh - 220px);
+  object-fit: contain; border-radius: 4px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.page-container .page-number {
+  position: absolute; bottom: -28px; left: 50%; transform: translateX(-50%);
+  color: rgba(255,255,255,0.5); font-size: var(--fs-xs);
+}
+
+/* Navigation arrows */
+.nav-arrow {
+  position: absolute; top: 0; bottom: 0; width: 90px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; opacity: 0; transition: opacity 0.3s;
+  z-index: 10;
+}
+.nav-arrow:hover { opacity: 1; }
+.nav-arrow.prev { left: 0; background: linear-gradient(to right, rgba(0,0,0,0.5), transparent); }
+.nav-arrow.next { right: 0; background: linear-gradient(to left, rgba(0,0,0,0.5), transparent); }
+.nav-arrow svg { width: 44px; height: 44px; fill: #fff; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)); }
+
+/* Thumbnail strip */
+.thumb-strip {
+  display: flex; gap: 4px; padding: 10px 20px;
+  background: rgba(0,0,0,0.4); overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  backdrop-filter: blur(8px);
+}
+.thumb-strip::-webkit-scrollbar { height: 4px; }
+.thumb-strip::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+.thumb {
+  width: 48px; height: 64px; object-fit: cover; border-radius: 3px;
+  cursor: pointer; opacity: 0.4; transition: all 0.2s;
+  border: 2px solid transparent; flex-shrink: 0;
+}
+.thumb.active { opacity: 1; border-color: var(--raz-green); }
+.thumb:hover { opacity: 0.7; }
+
+/* Audio player bar */
+.reader-footer {
+  height: 72px; background: rgba(0,0,0,0.6);
+  display: flex; align-items: center; padding: 0 24px; gap: 16px;
+  backdrop-filter: blur(8px);
+}
+.play-btn {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: var(--raz-green); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; flex-shrink: 0;
+}
+.play-btn:hover { background: var(--raz-green-dark); transform: scale(1.05); }
+.play-btn svg { width: 24px; height: 24px; fill: #fff; }
+
+.progress-wrap {
+  flex: 1; display: flex; flex-direction: column; gap: 4px;
+}
+.progress-bar {
+  width: 100%; height: 8px; background: rgba(255,255,255,0.15);
+  border-radius: 4px; cursor: pointer; position: relative;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%; background: var(--raz-green); border-radius: 4px;
+  width: 0%; transition: width 0.1s linear;
+}
+.progress-time {
+  display: flex; justify-content: space-between;
+  font-size: var(--fs-xs); color: rgba(255,255,255,0.5);
+}
+
+/* Speed control */
+.speed-btn {
+  color: rgba(255,255,255,0.7); font-size: var(--fs-sm); font-weight: 600;
+  padding: 6px 10px; border-radius: 4px; background: rgba(255,255,255,0.1);
+  transition: all 0.2s; flex-shrink: 0;
+}
+.speed-btn:hover { background: rgba(255,255,255,0.2); color: #fff; }
+
+/* Auto-play toggle */
+.autoplay-btn {
+  color: rgba(255,255,255,0.5); font-size: var(--fs-sm); font-weight: 600;
+  padding: 6px 10px; border-radius: 4px; background: rgba(255,255,255,0.08);
+  transition: all 0.2s; flex-shrink: 0;
+}
+.autoplay-btn:hover { background: rgba(255,255,255,0.15); }
+.autoplay-btn.on { color: var(--raz-green); background: rgba(76,175,80,0.15); }
+
+/* ========== Loading ========== */
+.loading-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 80px 20px; color: var(--raz-text-light); font-size: var(--fs-lg);
+}
+.loading-spinner {
+  width: 40px; height: 40px; border: 3px solid #ddd;
+  border-top-color: var(--raz-blue); border-radius: 50%;
+  animation: spin 0.8s linear infinite; margin-bottom: 16px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ========== Empty ========== */
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--raz-text-light);
+  font-size: var(--fs-lg);
+}
+.empty-state svg { width: 64px; height: 64px; margin-bottom: 12px; opacity: 0.3; }
+
+/* ========== Page turn animation ========== */
+.page-container.flip-left {
+  animation: flipLeft 0.3s ease;
+}
+.page-container.flip-right {
+  animation: flipRight 0.3s ease;
+}
+@keyframes flipLeft {
+  0% { transform: translateX(0); opacity: 1; }
+  50% { transform: translateX(-30px); opacity: 0.5; }
+  51% { transform: translateX(30px); opacity: 0.5; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+@keyframes flipRight {
+  0% { transform: translateX(0); opacity: 1; }
+  50% { transform: translateX(30px); opacity: 0.5; }
+  51% { transform: translateX(-30px); opacity: 0.5; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+/* ========== Responsive ========== */
+@media (max-width: 768px) {
+  :root { --fs-base: 16px; --fs-sm: 13px; --fs-xs: 11px; --fs-lg: 18px; --fs-xl: 22px; }
+  .book-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; }
+  .bookshelf { padding: 14px; }
+  .nav-arrow { width: 60px; }
+  .nav-arrow svg { width: 32px; height: 32px; }
+  .thumb { width: 40px; height: 54px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Top Navigation -->
+<nav class="top-nav">
+  <a class="logo" href="#/">
+    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg>
+    KidsA-Z Reader
+  </a>
+  <div class="stats" id="stats"></div>
+</nav>
+
+<!-- Level Tabs -->
+<div class="level-bar" id="levelBar"></div>
+
+<!-- Book Library -->
+<div class="bookshelf" id="bookshelf">
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loading-spinner"></div>
+    <div>Loading books...</div>
+  </div>
+</div>
+
+<!-- Reader Overlay -->
+<div class="reader-overlay" id="reader">
+  <div class="reader-header">
+    <button class="reader-close" onclick="closeReader()" title="Close (Esc)">&times;</button>
+    <div class="reader-title" id="readerTitle"></div>
+    <div class="reader-page-info" id="readerPageInfo"></div>
+  </div>
+  <div class="reader-body" id="readerBody">
+    <div class="nav-arrow prev" onclick="prevPage()">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </div>
+    <div class="page-container" id="pageContainer">
+      <img id="readerImg" />
+    </div>
+    <div class="nav-arrow next" onclick="nextPage()">
+      <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+    </div>
+  </div>
+  <div class="thumb-strip" id="thumbStrip"></div>
+  <div class="reader-footer">
+    <button class="play-btn" id="playBtn" onclick="togglePlay()">
+      <svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+    <div class="progress-wrap">
+      <div class="progress-bar" id="progressBar" onclick="seekAudio(event)">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-time">
+        <span id="timeCurrent">0:00</span>
+        <span id="timeDuration">0:00</span>
+      </div>
+    </div>
+    <button class="speed-btn" id="speedBtn" onclick="cycleSpeed()">1x</button>
+    <button class="autoplay-btn on" id="autoplayBtn" onclick="toggleAutoplay()">AUTO</button>
+  </div>
+</div>
+
+<audio id="audioPlayer" preload="auto"></audio>
+
+<script>
+// ========== State ==========
+let allBooks = [];
+let currentLevel = '';
+let currentBook = null;
+let currentPage = 0;
+let isPlaying = false;
+let autoplay = true;
+let playbackSpeed = 1;
+const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+let speedIndex = 2;
+
+const LEVEL_ORDER = ['aa','A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z','Z1','Z2'];
+
+// ========== Router (hash-based) ==========
+// URL patterns:
+//   #/                    → library home (all levels)
+//   #/level/A             → library filtered by level A
+//   #/book/aa/167-Pets    → reader for book aa/167-Pets
+//   #/book/aa/167-Pets/3  → reader for book aa/167-Pets at page 3
+
+function parseHash() {
+  const hash = window.location.hash.slice(1) || '/';
+  const parts = hash.split('/').filter(Boolean);
+
+  if (parts[0] === 'book' && parts.length >= 2) {
+    // Decode the book path from URL
+    const bookPath = decodeURIComponent(parts.slice(1, parts.length - (parts.length > 3 && /^\d+$/.test(parts[parts.length - 1]) ? 1 : 0)).join('/'));
+    const page = parts.length > 3 && /^\d+$/.test(parts[parts.length - 1]) ? parseInt(parts[parts.length - 1], 10) : 0;
+    return { view: 'book', bookPath, page };
+  } else if (parts[0] === 'level' && parts[1]) {
+    return { view: 'level', level: parts[1] };
+  }
+  return { view: 'home' };
+}
+
+function navigateTo(hash) {
+  window.location.hash = hash;
+}
+
+// Listen for hash changes
+window.addEventListener('hashchange', handleRoute);
+
+async function handleRoute() {
+  const route = parseHash();
+
+  if (route.view === 'book') {
+    // Open reader
+    if (!currentBook || currentBook.path !== route.bookPath) {
+      await openBook(route.bookPath, route.page);
+    } else if (route.page !== undefined && route.page !== currentPage) {
+      showPage(route.page, route.page > currentPage ? 'next' : 'prev');
+    }
+  } else {
+    // Close reader if open
+    if (currentBook) {
+      closeReaderSilent();
+    }
+
+    if (route.view === 'level') {
+      currentLevel = route.level;
+    } else {
+      currentLevel = '';
+    }
+    renderLevelBar();
+    renderBooks();
+  }
+}
+
+// Close reader without changing hash (to avoid loop)
+function closeReaderSilent() {
+  document.getElementById('reader').classList.remove('open');
+  document.body.style.overflow = '';
+  const audio = document.getElementById('audioPlayer');
+  audio.pause();
+  audio.src = '';
+  isPlaying = false;
+  updatePlayButton();
+  currentBook = null;
+}
+
+// ========== Init ==========
+async function init() {
+  try {
+    const res = await fetch('/api/books');
+    allBooks = await res.json();
+    allBooks.sort((a, b) => {
+      const ld = LEVEL_ORDER.indexOf(a.level) - LEVEL_ORDER.indexOf(b.level);
+      if (ld !== 0) return ld;
+      return a.title.localeCompare(b.title);
+    });
+    renderLevelBar();
+    renderBooks();
+    document.getElementById('stats').textContent = `${allBooks.length} books`;
+
+    // Handle initial route
+    handleRoute();
+  } catch (e) {
+    document.getElementById('loadingScreen').innerHTML =
+      '<div style="color:#e53e3e">Failed to load books. Make sure the server is running.</div>';
+  }
+}
+
+// ========== Level Bar ==========
+function renderLevelBar() {
+  const levels = [...new Set(allBooks.map(b => b.level))].sort(
+    (a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b)
+  );
+  const bar = document.getElementById('levelBar');
+  let html = `<a class="level-tab ${!currentLevel ? 'active' : ''}" href="#/">All</a>`;
+  for (const l of levels) {
+    const count = allBooks.filter(b => b.level === l).length;
+    html += `<a class="level-tab ${currentLevel === l ? 'active' : ''}" href="#/level/${l}">${l} <small>${count}</small></a>`;
+  }
+  bar.innerHTML = html;
+}
+
+function filterLevel(level) {
+  currentLevel = level;
+  renderLevelBar();
+  renderBooks();
+}
+
+// ========== Book Grid ==========
+function renderBooks() {
+  const books = currentLevel ? allBooks.filter(b => b.level === currentLevel) : allBooks;
+  const shelf = document.getElementById('bookshelf');
+
+  if (books.length === 0) {
+    shelf.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg><div>No books found</div></div>';
+    return;
+  }
+
+  if (currentLevel) {
+    shelf.innerHTML = `<div class="shelf-section">
+      <div class="shelf-title">Level ${currentLevel} <span class="count">${books.length}</span></div>
+      <div class="book-grid">${books.map(renderCard).join('')}</div>
+    </div>`;
+  } else {
+    const grouped = {};
+    for (const b of books) {
+      if (!grouped[b.level]) grouped[b.level] = [];
+      grouped[b.level].push(b);
+    }
+    const sortedLevels = Object.keys(grouped).sort(
+      (a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b)
+    );
+    shelf.innerHTML = sortedLevels.map(l => `
+      <div class="shelf-section">
+        <div class="shelf-title"><a href="#/level/${l}" style="color:inherit">Level ${l}</a> <span class="count">${grouped[l].length}</span></div>
+        <div class="book-grid">${grouped[l].map(renderCard).join('')}</div>
+      </div>
+    `).join('');
+  }
+}
+
+function renderCard(b) {
+  // Encode path for URL to handle special characters
+  const encodedPath = b.path.split('/').map(encodeURIComponent).join('/');
+  const coverSrc = b.cover || `/books/${b.path}/images/page-00.jpg`;
+  return `<a class="book-card" href="#/book/${encodedPath}">
+    <div class="cover-wrap">
+      <img src="${coverSrc}" alt="${escHtml(b.title)}" loading="lazy"
+        onerror="this.style.display='none'">
+      <div class="level-badge">${b.level}</div>
+      ${b.audioCount > 0 ? `<div class="audio-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/></svg>${b.audioCount}</div>` : ''}
+    </div>
+    <div class="book-info">
+      <div class="book-title">${escHtml(b.title)}</div>
+      <div class="book-pages">${b.imageCount} pages</div>
+    </div>
+  </a>`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ========== Reader ==========
+async function openBook(bookPath, page) {
+  try {
+    // Encode each path segment separately to preserve slashes
+    const encodedPath = bookPath.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(`/api/book/${encodedPath}`);
+    const detail = await res.json();
+    if (!detail || detail.error) { alert('Failed to load book'); return; }
+
+    currentBook = {
+      meta: detail.meta,
+      images: detail.images,
+      audioMap: detail.audioMap,
+      totalPages: detail.imageCount,
+      cover: detail.cover,
+      path: bookPath,
+    };
+    currentPage = page || 0;
+
+    document.getElementById('readerTitle').textContent = detail.meta.title;
+    document.getElementById('reader').classList.add('open');
+    document.body.style.overflow = 'hidden';
+
+    showPage(currentPage, null);
+    renderThumbs();
+  } catch (e) {
+    alert('Error loading book: ' + e.message);
+  }
+}
+
+function closeReader() {
+  closeReaderSilent();
+  navigateTo(currentLevel ? `/level/${currentLevel}` : '/');
+}
+
+function showPage(idx, direction) {
+  if (!currentBook) return;
+  const prevPage = currentPage;
+  currentPage = Math.max(0, Math.min(idx, currentBook.totalPages - 1));
+
+  // Update URL (without triggering hashchange handler)
+  // Encode path segments to handle special characters
+  const encodedBookPath = currentBook.path.split('/').map(encodeURIComponent).join('/');
+  const targetHash = `#/book/${encodedBookPath}/${currentPage}`;
+  if (window.location.hash !== targetHash) {
+    window.history.replaceState(null, '', targetHash);
+  }
+
+  // Page turn animation
+  const container = document.getElementById('pageContainer');
+  if (direction && prevPage !== currentPage) {
+    container.classList.remove('flip-left', 'flip-right');
+    void container.offsetWidth;
+    container.classList.add(direction === 'next' ? 'flip-left' : 'flip-right');
+  }
+
+  // Show image
+  const img = document.getElementById('readerImg');
+  img.src = currentBook.images[currentPage] || '';
+  document.getElementById('readerPageInfo').textContent = `${currentPage + 1} / ${currentBook.totalPages}`;
+
+  // Update thumbnail active state
+  document.querySelectorAll('.thumb').forEach((t, i) => {
+    t.classList.toggle('active', i === currentPage);
+  });
+
+  // Scroll thumbnail into view
+  const activeThumb = document.querySelector('.thumb.active');
+  if (activeThumb) {
+    activeThumb.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+
+  // Play audio for this page
+  if (autoplay) {
+    playPageAudio(currentPage);
+  }
+}
+
+function nextPage() {
+  if (currentPage < currentBook.totalPages - 1) {
+    showPage(currentPage + 1, 'next');
+  }
+}
+
+function prevPage() {
+  if (currentPage > 0) {
+    showPage(currentPage - 1, 'prev');
+  }
+}
+
+function renderThumbs() {
+  if (!currentBook) return;
+  const strip = document.getElementById('thumbStrip');
+  strip.innerHTML = '';
+  for (let i = 0; i < currentBook.totalPages; i++) {
+    const img = document.createElement('img');
+    img.src = currentBook.images[i] || '';
+    img.className = 'thumb' + (i === currentPage ? ' active' : '');
+    img.onclick = () => showPage(i, i > currentPage ? 'next' : 'prev');
+    img.loading = 'lazy';
+    img.onerror = function() { this.style.visibility = 'hidden'; };
+    strip.appendChild(img);
+  }
+}
+
+// ========== Audio ==========
+function playPageAudio(pageIdx) {
+  if (!currentBook) return;
+  const audio = document.getElementById('audioPlayer');
+
+  const audioKey = pageIdx;
+  const audioUrl = currentBook.audioMap[audioKey];
+
+  if (audioUrl) {
+    audio.src = audioUrl;
+    audio.playbackRate = playbackSpeed;
+    audio.play().then(() => {
+      isPlaying = true;
+      updatePlayButton();
+    }).catch(() => {
+      isPlaying = false;
+      updatePlayButton();
+    });
+  } else {
+    audio.pause();
+    audio.src = '';
+    isPlaying = false;
+    updatePlayButton();
+    if (autoplay && currentPage < currentBook.totalPages - 1) {
+      setTimeout(() => nextPage(), 800);
+    }
+  }
+}
+
+function togglePlay() {
+  const audio = document.getElementById('audioPlayer');
+  if (isPlaying) {
+    audio.pause();
+    isPlaying = false;
+  } else {
+    if (!audio.src || audio.src === window.location.href || audio.ended) {
+      playPageAudio(currentPage);
+    } else {
+      audio.play().catch(() => {});
+      isPlaying = true;
+    }
+  }
+  updatePlayButton();
+}
+
+function updatePlayButton() {
+  const icon = document.getElementById('playIcon');
+  if (isPlaying) {
+    icon.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
+  } else {
+    icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+  }
+}
+
+// Audio progress
+const audioPlayer = document.getElementById('audioPlayer');
+audioPlayer.addEventListener('timeupdate', () => {
+  if (audioPlayer.duration) {
+    const pct = (audioPlayer.currentTime / audioPlayer.duration) * 100;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('timeCurrent').textContent = formatTime(audioPlayer.currentTime);
+    document.getElementById('timeDuration').textContent = formatTime(audioPlayer.duration);
+  }
+});
+
+audioPlayer.addEventListener('ended', () => {
+  isPlaying = false;
+  updatePlayButton();
+  document.getElementById('progressFill').style.width = '100%';
+  if (autoplay && currentPage < currentBook.totalPages - 1) {
+    setTimeout(() => nextPage(), 600);
+  }
+});
+
+audioPlayer.addEventListener('error', () => {
+  isPlaying = false;
+  updatePlayButton();
+});
+
+function seekAudio(e) {
+  const audio = document.getElementById('audioPlayer');
+  if (!audio.duration) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  audio.currentTime = pct * audio.duration;
+}
+
+function formatTime(s) {
+  if (!s || isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
+// Speed control
+function cycleSpeed() {
+  speedIndex = (speedIndex + 1) % SPEEDS.length;
+  playbackSpeed = SPEEDS[speedIndex];
+  document.getElementById('speedBtn').textContent = playbackSpeed + 'x';
+  document.getElementById('audioPlayer').playbackRate = playbackSpeed;
+}
+
+// Autoplay toggle
+function toggleAutoplay() {
+  autoplay = !autoplay;
+  const btn = document.getElementById('autoplayBtn');
+  btn.classList.toggle('on', autoplay);
+  btn.textContent = autoplay ? 'AUTO' : 'MANUAL';
+}
+
+// ========== Keyboard ==========
+document.addEventListener('keydown', e => {
+  if (!currentBook) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); nextPage(); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); prevPage(); }
+  else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  else if (e.key === 'Escape') closeReader();
+});
+
+// ========== Touch swipe ==========
+let touchStartX = 0;
+let touchStartY = 0;
+document.getElementById('readerBody').addEventListener('touchstart', e => {
+  touchStartX = e.changedTouches[0].screenX;
+  touchStartY = e.changedTouches[0].screenY;
+}, { passive: true });
+document.getElementById('readerBody').addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].screenX - touchStartX;
+  const dy = e.changedTouches[0].screenY - touchStartY;
+  if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+    if (dx < 0) nextPage();
+    else prevPage();
+  }
+}, { passive: true });
+
+// ========== Start ==========
+init();
+</script>
+</body>
+</html>

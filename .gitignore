@@ -6,6 +6,7 @@ dist/
 
 # Environment
 .env
+.env.local
 .DS_Store
 Thumbs.db
 *.log
@@ -13,25 +14,53 @@ Thumbs.db
 # IDE
 .planning/
 .claude/
+.trae/
+.vscode/
+.idea/
 
 # Backup files
 *.bak.ts
+*.bak.js
 
 # Sensitive data - DO NOT COMMIT
+cookies/
 data/probe/probe-results.json
 data/probe/probe-failed.json
 data/probe/probe-live.json
-data/cookies/
+data/probe/all-class-students.json
+data/probe/students-by-level.json
+data/probe/students-by-level.txt
+data/probe/probe-results.xlsx
+data/probe/probe-results.csv
+data/probe/analysis-report.md
+data/booklists/*.json
 data/download-progress-v2.json
+zx-pics/
 
-# Downloaded resources
+# Downloaded resources (copyrighted content)
 downloads/
 
-# Debug files
-debug-page.html
-scripts/sanitize-data.js
+# Debug/temp files
+debug-*.png
+debug-*.html
+reader.html
+intercepted-urls.txt
+all-download-urls.txt
+missing-files.txt
+failed-downloads.txt
+downloads-*.txt
+*-report.txt
+*-report.json
+supplement-results.json
+website-test-report.json
+books-update.sql
+.history.md
 
-# Keep these (public versions)
+# Worker build cache
+worker/.wrangler/
+worker/tmp/
+
+# Keep these (public versions / placeholders)
 !data/probe/probe-results.public.json
 !data/booklists/.gitkeep
 !data/cookies/.gitkeep

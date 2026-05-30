@@ -1,24 +1,33 @@
 {
-  "name": "kids-a-z-scraper",
+  "name": "leveled-reader",
   "version": "1.0.0",
-  "description": "KidsA-Z student data scraper with password probing",
+  "description": "Leveled reading book resource manager with local reader webapp",
   "main": "index.js",
   "scripts": {
+    "reader": "node reader/server.js",
+    "download": "npx tsx src/scraper/download-all-books-v2.ts --headed",
+    "download:resume": "npx tsx src/scraper/download-all-books-v2.ts --headed --resume",
+    "download:extract": "npx tsx src/scraper/download-all-books-v2.ts --headed --extract-only",
+    "download:audio": "npx tsx src/scraper/download-all-audio.ts --headed",
     "fetch-students": "tsx src/fetch-all-class-students.ts",
     "probe": "tsx src/probe-multi-class.ts",
-    "probe-retry": "tsx src/retry-failed-3digit.ts",
+    "probe:retry": "tsx src/retry-failed-3digit.ts",
     "check-progress": "tsx src/check-progress.ts",
     "fetch-missing": "tsx src/fetch-missing-data.ts",
     "generate-report": "tsx src/generate-report.ts",
-    "clean-failed": "tsx src/clean-failed.ts"
+    "clean-failed": "tsx src/clean-failed.ts",
+    "stats": "node scripts/stats-downloads.js",
+    "book-list": "node scripts/generate-book-list.js",
+    "supplement": "node scripts/supplement-from-reader.js"
   },
   "keywords": [
-    "kidsa-z",
-    "scraper",
-    "playwright"
+    "leveled-reading",
+    "book-reader",
+    "playwright",
+    "scraper"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "@playwright/test": "^1.58.2",

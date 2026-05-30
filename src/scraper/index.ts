@@ -1,252 +1,134 @@
-import { BrowserController } from './browser';
-import { PageParser } from './parser';
+import { chromium, Browser, Page } from 'playwright';
+import { Auth } from './auth';
+import { BookAPI } from './book-api';
 import { Downloader } from './downloader';
-import { Storage } from './storage';
-import { BookInfo, BookPage, ScraperConfig, BookListItem } from '../types';
-import * as path from 'path';
-import * as readline from 'readline';
+import { StudentAccount, ScraperOptions, DownloadedBook } from './types';
 
-export class KidsAZScraper {
-  private config: ScraperConfig;
-  private browser!: BrowserController;
-  private parser!: PageParser;
+export class Phase2Scraper {
+  private browser!: Browser;
+  private page!: Page;
+  private auth!: Auth;
+  private bookApi!: BookAPI;
   private downloader!: Downloader;
-  private storage!: Storage;
+  private options: ScraperOptions;
 
-  constructor(config: Partial<ScraperConfig> = {}) {
-    this.config = {
-      cookiesPath: config.cookiesPath || path.join(process.cwd(), 'cookies.json'),
-      outputDir: config.outputDir || path.join(process.cwd(), 'data'),
-      startUrl: config.startUrl || 'https://www.kidsa-z.com/main/ReadingBookRoom#!/collectionId/1?level=L',
-      headless: config.headless ?? false
+  constructor(options: Partial<ScraperOptions> = {}) {
+    this.options = {
+      proxy: options.proxy || 'http://localhost:1082',
+      headless: options.headless ?? false,
+      outputDir: options.outputDir || 'data/downloads',
+      maxBooks: options.maxBooks || 9999,
+      maxRetries: options.maxRetries || 3,
+      downloadDelayMs: options.downloadDelayMs || 200
     };
-
-    this.storage = new Storage(this.config.outputDir);
   }
 
-  async initialize(): Promise<void> {
-    this.browser = new BrowserController(this.config);
-    await this.browser.launch();
-    this.parser = new PageParser(this.browser.getPage());
-    this.downloader = new Downloader(this.storage);
+  async launch(): Promise<void> {
+    console.log('=== Phase2 Scraper 启动 ===');
+    console.log(`代理: ${this.options.proxy}`);
+    console.log(`输出: ${this.options.outputDir}`);
+
+    this.browser = await chromium.launch({
+      headless: this.options.headless,
+      args: ['--start-maximized', `--proxy-server=${this.options.proxy}`]
+    });
+
+    const ctx = await this.browser.newContext({
+      viewport: { width: 1280, height: 800 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    });
+
+    this.page = await ctx.newPage();
+    this.auth = new Auth(this.page);
+    this.bookApi = new BookAPI(this.auth);
+    this.downloader = new Downloader(this.page, this.options.outputDir, this.options.maxRetries);
+
+    console.log('✓ 浏览器已启动\n');
   }
 
-  async scrapeAllBooks(): Promise<void> {
-    console.log('========================================');
-    console.log('  KidsA-Z Book Scraper');
-    console.log('========================================');
-    console.log('');
-    console.log('请在浏览器中:');
-    console.log('  1. 手动导航到包含书籍列表的页面');
-    console.log('  2. 确保能看到 <student-resource-grid>');
-    console.log('  3. 在此终端按回车键开始采集');
-    console.log('');
+  async run(account: StudentAccount, level: string): Promise<DownloadedBook[]> {
+    const startTime = Date.now();
+    console.log(`\n━━━ 流水线开始: ${account.screenName} / Level ${level} ━━━\n`);
 
-    // 等待用户按回车
-    await this.waitForEnter();
+    // Step 1: Login
+    await this.auth.login(account);
+    await this.auth.visitStatsPage();
+    await this.auth.enterReadingRoom();
 
-    // 解析书籍列表（只获取数量，不获取详细信息）
-    console.log('► 解析书籍列表...');
-    const bookCount = await this.getBookCountFromGrid();
+    // Step 2: Fetch book list
+    const books = await this.bookApi.fetchBookList(level);
+    const targetBooks = books.slice(0, this.options.maxBooks);
+    console.log(`\n目标下载: ${targetBooks.length}/${books.length} 本\n`);
 
-    if (bookCount === 0) {
-      console.log('⚠ 未找到书籍，请确保在正确的页面');
-      return;
-    }
-
-    console.log(`✓ 找到 ${bookCount} 本书`);
-    console.log('');
-
-    for (let i = 0; i < bookCount; i++) {
-      const bookId = `book-${String(i + 1).padStart(3, '0')}`;
-      console.log(`━━━ 书籍 ${i + 1}/${bookCount} ━━━`);
-
-      if (this.storage.bookExists(bookId)) {
-        console.log(`  跳过（已存在）`);
-        console.log('');
-        continue;
-      }
+    // Step 3: Download
+    const results: DownloadedBook[] = [];
+    for (let i = 0; i < targetBooks.length; i++) {
+      const book = targetBooks[i];
+      console.log(`\n── 书籍 ${i + 1}/${targetBooks.length}: "${book.title}" (id=${book.resource_id}) ──`);
 
       try {
-        await this.scrapeSingleBook(i, bookId);
-      } catch (error) {
-        console.error(`  ✗ 采集失败:`, error);
+        const result = await this.downloader.downloadFullBook(book);
+        this.downloader.saveMetadata(result);
+        results.push(result);
+        console.log(`  ✓ 封面:${result.coverPath ? 'OK' : '-'} 页数:${result.pagePaths.length}`);
+      } catch (err) {
+        console.error(`  ✗ 失败:`, err);
       }
 
-      console.log('');
+      if (i < targetBooks.length - 1) {
+        await this.sleep(this.options.downloadDelayMs);
+      }
     }
 
-    console.log('========================================');
-    console.log('  采集完成！');
-    console.log('========================================');
+    // Summary
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`  完成! ${results.length}/${targetBooks.length} 本书`);
+    console.log(`  耗时: ${elapsed}s`);
+    console.log(`  输出目录: ${this.options.outputDir}`);
+    console.log(`${'='.repeat(50)}\n`);
+
+    return results;
   }
 
-  private async getBookCountFromGrid(): Promise<number> {
-    return await this.browser.getPage().evaluate(() => {
-      const grid = document.querySelector('student-resource-grid');
-      if (!grid) return 0;
-      const cards = grid.querySelectorAll('[class*="card"], [class*="book"]');
-      return cards.length;
-    });
-  }
+  async runPipelineAfterLogin(level: string): Promise<DownloadedBook[]> {
+    const startTime = Date.now();
+    console.log(`\n━━━ 流水线(已登录) / Level ${level} ━━━\n`);
 
-  private async waitForEnter(): Promise<void> {
-    return new Promise(resolve => {
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout
-      });
-      rl.question('', () => {
-        rl.close();
-        resolve();
-      });
-    });
-  }
+    const books = await this.bookApi.fetchBookList(level);
+    const targetBooks = books.slice(0, this.options.maxBooks);
+    console.log(`\n目标下载: ${targetBooks.length}/${books.length} 本\n`);
 
-  private async scrapeSingleBook(bookIndex: number, bookId: string): Promise<void> {
-    this.storage.ensureBookDirs(bookId);
-
-    const pages: BookPage[] = [];
-    const allAudioFiles: string[] = [];
-    let bookTitle = bookId;
-
-    try {
-      // 步骤1: 点击书籍卡片
-      console.log(`  点击书籍卡片...`);
-      const clicked = await this.parser.clickBookCard(bookIndex);
-      if (!clicked) {
-        console.log(`  ⚠ 无法点击书籍`);
-        return;
+    const results: DownloadedBook[] = [];
+    for (let i = 0; i < targetBooks.length; i++) {
+      const book = targetBooks[i];
+      console.log(`\n── 书籍 ${i + 1}/${targetBooks.length}: "${book.title}" (id=${book.resource_id}) ──`);
+      try {
+        const result = await this.downloader.downloadFullBook(book);
+        this.downloader.saveMetadata(result);
+        results.push(result);
+        console.log(`  ✓ 封面:${result.coverPath ? 'OK' : '-'} 页数:${result.pagePaths.length}`);
+      } catch (err) {
+        console.error(`  ✗ 失败:`, err);
       }
-
-      // 步骤2: 等待弹出窗口
-      console.log(`  等待弹出窗口...`);
-      await this.parser.waitForPopup();
-      await this.browser.sleep(2000);
-
-      // 步骤3: 点击第一个 delivery 链接（听的图标）
-      console.log(`  点击听的图标...`);
-      const deliveryClicked = await this.parser.clickFirstDeliveryLink();
-      if (!deliveryClicked) {
-        console.log(`  ⚠ 无法点击 delivery 链接`);
-        await this.parser.closePopup();
-        return;
-      }
-
-      // 步骤4: 等待书籍阅读窗口
-      console.log(`  等待书籍阅读窗口...`);
-      await this.parser.waitForBookReader();
-      await this.browser.sleep(3000);
-
-      // 获取总页数
-      const totalPages = await this.parser.getTotalPages();
-      console.log(`  共 ${totalPages} 页`);
-
-      // 采集封面（第一页）
-      console.log(`  采集第 1 页...`);
-      const firstPageData = await this.scrapePage(bookId, 1);
-      pages.push(firstPageData);
-      if (firstPageData.audioFiles) {
-        allAudioFiles.push(...firstPageData.audioFiles);
-      }
-
-      // 保存封面引用
-      const coverPath = firstPageData.image;
-
-      // 翻页采集剩余页
-      for (let currentPage = 2; currentPage <= Math.min(totalPages, 30); currentPage++) {
-        console.log(`  采集第 ${currentPage} 页...`);
-
-        // 翻页
-        const hasNext = await this.parser.goToNextPage();
-        if (!hasNext) {
-          console.log(`  没有下一页了`);
-          break;
-        }
-
-        await this.browser.sleep(1500);
-
-        // 采集当前页
-        const pageData = await this.scrapePage(bookId, currentPage);
-        pages.push(pageData);
-        if (pageData.audioFiles) {
-          allAudioFiles.push(...pageData.audioFiles);
-        }
-      }
-
-      // 保存书籍信息
-      const bookInfo: BookInfo = {
-        id: bookId,
-        title: bookTitle,
-        level: 'L',
-        collectionId: '1',
-        url: '',
-        coverImage: coverPath,
-        pageCount: pages.length,
-        pages,
-        audioFiles: [...new Set(allAudioFiles)].map(f => path.basename(f)),
-        collectedAt: new Date().toISOString()
-      };
-
-      this.storage.saveBookInfo(bookId, bookInfo);
-      console.log(`  ✓ 保存完成: ${bookInfo.pageCount} 页`);
-
-    } finally {
-      // 关闭弹出窗口，准备下一本
-      await this.parser.closePopup();
-      await this.browser.sleep(1000);
-    }
-  }
-
-  private async scrapePage(bookId: string, pageNum: number): Promise<BookPage> {
-    const result: BookPage = { page: pageNum };
-
-    // 截图
-    const imagePath = this.storage.getPageImagePath(bookId, pageNum);
-    await this.downloader.captureScreenshot(this.browser.getPage(), imagePath);
-    result.image = path.basename(imagePath);
-
-    // 提取文字
-    const text = await this.parser.extractCurrentPageText();
-    if (text) {
-      result.text = text;
-      this.storage.savePageText(bookId, pageNum, text);
+      if (i < targetBooks.length - 1) await this.sleep(this.options.downloadDelayMs);
     }
 
-    // 提取图片（除了截图，也下载 img 标签的图片）
-    const images = await this.parser.extractCurrentPageImages();
-    if (images.length > 0) {
-      for (let i = 0; i < Math.min(images.length, 3); i++) {
-        const imgExt = images[i].split('.').pop() || 'jpg';
-        const imgPath = this.storage.getPageImagePath(bookId, pageNum, imgExt);
-        try {
-          await this.downloader.downloadImage(this.browser.getPage(), images[i], imgPath);
-        } catch {
-          // 忽略下载错误
-        }
-      }
-    }
-
-    // 提取音频
-    const audioUrls = await this.parser.extractCurrentPageAudio();
-    if (audioUrls.length > 0) {
-      result.audioFiles = [];
-      for (let i = 0; i < audioUrls.length; i++) {
-        const audioExt = audioUrls[i].split('.').pop() || 'mp3';
-        const audioPath = this.storage.getPageAudioPath(bookId, pageNum, i, audioExt);
-        try {
-          await this.downloader.downloadAudio(this.browser.getPage(), audioUrls[i], audioPath);
-          result.audioFiles.push(path.basename(audioPath));
-        } catch {
-          // 忽略下载错误
-        }
-      }
-    }
-
-    return result;
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    console.log(`\n${'='.repeat(50)}`);
+    console.log(`  完成! ${results.length}/${targetBooks.length} 本书, ${elapsed}s`);
+    console.log(`${'='.repeat(50)}\n`);
+    return results;
   }
 
   async close(): Promise<void> {
-    await this.browser.close();
+    if (this.browser) await this.browser.close();
   }
+
+  getPage(): Page { return this.page; }
+  getAuth(): Auth { return this.auth; }
+  getBookAPI(): BookAPI { return this.bookApi; }
+  getDownloader(): Downloader { return this.downloader; }
+
+  private sleep(ms: number): Promise<void> { return new Promise(r => setTimeout(r, ms)); }
 }

@@ -187,6 +187,94 @@ async function downloadAudio(contentId: number, slug: string, theme: string, aud
   return count;
 }
 
+// ============ 从拦截到的URL提取范式并按模式下载 ============
+
+function extractPatternFromIntercepted(interceptedImgs: string[], interceptedMp3s: string[]): { contentId: number; slug: string; theme: string } | null {
+  // 从mp3提取 slug/theme/contentId
+  if (interceptedMp3s.length > 0) {
+    const mp3 = interceptedMp3s.find(u => u.includes('_title_text.mp3')) || interceptedMp3s[0];
+    const m = mp3.match(/\/audio\/(\d+)\/raz_(.+?)_(.+?)_(?:title|p\d+)_text\.mp3/);
+    if (m) {
+      return { contentId: parseInt(m[1], 10), slug: m[2], theme: m[3] };
+    }
+  }
+  // 从img提取 contentId
+  if (interceptedImgs.length > 0) {
+    const imgMatch = interceptedImgs[0].match(/\/readonly\/(\d+)\//);
+    if (imgMatch) {
+      return { contentId: parseInt(imgMatch[1], 10), slug: '', theme: '' };
+    }
+  }
+  return null;
+}
+
+async function downloadFromUrls(urls: string[], dir: string, prefix: string, ext: string): Promise<number> {
+  fs.mkdirSync(dir, { recursive: true });
+  let count = 0;
+  for (const url of urls) {
+    // 从URL提取文件名，保持原始格式
+    let filename: string;
+    if (url.includes('/book/page-')) {
+      // 图片: 从URL提取page号，补零保持 page-02.jpg 格式（与RAZ网站一致）
+      const m = url.match(/\/page-(\d+)\.jpg/);
+      if (m) {
+        filename = `page-${m[1].padStart(2, '0')}.jpg`;
+      } else {
+        filename = url.split('/').pop() || `file-${count}${ext}`;
+      }
+    } else if (url.includes('/audio/')) {
+      // 音频: raz_slug_theme_p1_text.mp3
+      const m = url.match(/\/(raz_.+\.mp3)/);
+      filename = m ? m[1] : url.split('/').pop() || `file-${count}${ext}`;
+    } else {
+      filename = url.split('/').pop() || `file-${count}${ext}`;
+    }
+    
+    const fp = path.join(dir, filename);
+    if (fs.existsSync(fp) && fs.statSync(fp).size > 1000) { count++; continue; }
+    
+    const buf = await httpGetBuffer(url);
+    if (buf && buf.length > 100) {
+      fs.writeFileSync(fp, buf);
+      count++;
+      if (count % 3 === 0) process.stdout.write(`\r    [URL-DL] ${count}/${urls.length} files`);
+    }
+    await sleep(50);
+  }
+  process.stdout.write(`\r    [URL-DL] ${count}/${urls.length} files\n`);
+  return count;
+}
+
+// ============ 保存拦截到的URL到文件 ============
+
+const INTERCEPTED_URLS_FILE = path.resolve(__dirname, '..', '..', 'intercepted-urls.txt');
+const interceptedUrlsLog: string[] = [];
+
+function logInterceptedUrls(book: any, info: any) {
+  const timestamp = new Date().toISOString();
+  const header = `\n[${timestamp}] ${book.resourceId}-${book.title} (Level ${book.level})`;
+  interceptedUrlsLog.push(header);
+  
+  if (info.interceptedImgUrls?.length > 0) {
+    interceptedUrlsLog.push(`  IMAGES (${info.interceptedImgUrls.length}):`);
+    for (const u of info.interceptedImgUrls) {
+      interceptedUrlsLog.push(`    ${u}`);
+    }
+  }
+  if (info.interceptedMp3Urls?.length > 0) {
+    interceptedUrlsLog.push(`  AUDIO (${info.interceptedMp3Urls.length}):`);
+    for (const u of info.interceptedMp3Urls) {
+      interceptedUrlsLog.push(`    ${u}`);
+    }
+  }
+  if (info.allInterceptedUrls?.length > 0) {
+    interceptedUrlsLog.push(`  TOTAL: ${info.allInterceptedUrls.length} URLs`);
+  }
+  
+  // 实时写入文件
+  fs.writeFileSync(INTERCEPTED_URLS_FILE, interceptedUrlsLog.join('\n'), 'utf-8');
+}
+
 // ============ Login ============
 
 async function login(page: Page, student: StudentRow): Promise<boolean> {
@@ -614,14 +702,61 @@ async function processBookInReadingRoom(
   }
 
   // 6. 设置请求拦截器（在导航前！）
+  // 使用 CDP 捕获所有网络请求（包括 iframe 内的音频请求）
   const interceptedImgs: string[] = [];
   const interceptedMp3s: string[] = [];
+  const allInterceptedUrls: string[] = []; // 记录所有拦截到的资源URL
+  
+  // 方法1: page.on('request') - 捕获主页面请求
   const reqHandler = (req: any) => {
     const u = req.url();
-    if (u.includes('mi.content.kidsa-z.com/readonly/') && u.includes('/book/page-')) interceptedImgs.push(u);
-    if (u.includes('mi.content.kidsa-z.com/audio/') && u.includes('.mp3')) interceptedMp3s.push(u);
+    if (u.includes('mi.content.kidsa-z.com/readonly/') && u.includes('/book/page-')) {
+      if (!interceptedImgs.includes(u)) interceptedImgs.push(u);
+      if (!allInterceptedUrls.includes(u)) allInterceptedUrls.push(u);
+    }
+    if (u.includes('mi.content.kidsa-z.com/audio/') && u.includes('.mp3') && !interceptedMp3s.includes(u)) {
+      interceptedMp3s.push(u);
+      allInterceptedUrls.push(u);
+      console.log(`    [request] 拦截mp3: ${u.substring(u.lastIndexOf('/') + 1)}`);
+    }
   };
   page.on('request', reqHandler);
+
+  // 方法2: page.on('response') - 捕获所有响应（包括iframe内的请求）
+  const resHandler = (res: any) => {
+    const u = res.url();
+    if (u.includes('mi.content.kidsa-z.com/audio/') && u.includes('.mp3') && !interceptedMp3s.includes(u)) {
+      interceptedMp3s.push(u);
+      allInterceptedUrls.push(u);
+      console.log(`    [response] 拦截mp3: ${u.substring(u.lastIndexOf('/') + 1)}`);
+    }
+    if (u.includes('mi.content.kidsa-z.com/readonly/') && u.includes('/book/page-') && !interceptedImgs.includes(u)) {
+      interceptedImgs.push(u);
+      if (!allInterceptedUrls.includes(u)) allInterceptedUrls.push(u);
+    }
+  };
+  page.on('response', resHandler);
+
+  // 方法3: CDP Network.requestWillBeSent - 最可靠，捕获所有网络请求
+  let cdpSession: any = null;
+  try {
+    cdpSession = await page.context().newCDPSession(page);
+    await cdpSession.send('Network.enable');
+    cdpSession.on('Network.requestWillBeSent', (params: any) => {
+      const u = params.request.url;
+      if (u.includes('mi.content.kidsa-z.com/audio/') && u.includes('.mp3') && !interceptedMp3s.includes(u)) {
+        interceptedMp3s.push(u);
+        allInterceptedUrls.push(u);
+        console.log(`    [CDP] 拦截mp3: ${u.substring(u.lastIndexOf('/') + 1)}`);
+      }
+      if (u.includes('mi.content.kidsa-z.com/readonly/') && u.includes('/book/page-') && !interceptedImgs.includes(u)) {
+        interceptedImgs.push(u);
+        if (!allInterceptedUrls.includes(u)) allInterceptedUrls.push(u);
+      }
+    });
+  } catch (e: any) {
+    console.log(`    CDP session创建失败: ${e.message}`);
+  }
 
   try {
     // 7. 导航到Activity页面
@@ -711,12 +846,19 @@ async function processBookInReadingRoom(
     }
   } finally {
     page.off('request', reqHandler);
+    page.off('response', resHandler);
+    if (cdpSession) {
+      try { await cdpSession.detach(); } catch {}
+    }
   }
+
+  // 将拦截到的URL加入结果
+  result.interceptedImgUrls = interceptedImgs;
+  result.interceptedMp3Urls = interceptedMp3s;
+  result.allInterceptedUrls = allInterceptedUrls;
 
   return result;
 }
-
-// ============ Return to ReadingRoom from Activity page ============
 
 async function returnToReadingRoom(page: Page): Promise<void> {
   await page.goto(`${BASE}/main/ReadingBookRoom#!/collectionId/1`, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -768,16 +910,34 @@ async function downloadBook(page: Page, book: BookEntry, student: StudentRow, ar
     theme = info.theme;
     book.activityUrl = info.activityUrl;
 
-    // Step 2: 并行下载cover、img、audio（捕获到什么下载什么）
-    console.log(`    并行下载: cover=${!!coverUrl}, img=${!!contentId}, audio=${!!slug && !!theme}`);
+    // 记录拦截到的URL到文件
+    logInterceptedUrls(book, info);
+
+    // Step 2: 从拦截到的URL提取范式，按模式下载完整系列（直到404）
+    // 范式优先：用 downloadImages/downloadAudio 下载 p0-pN / title+p1-pN 完整系列
+    // 回退：仅用拦截到的URL直接下载
+    const pattern = extractPatternFromIntercepted(info.interceptedImgUrls || [], info.interceptedMp3Urls || []);
+    const effectiveContentId = pattern?.contentId || contentId;
+    const effectiveSlug = pattern?.slug || slug;
+    const effectiveTheme = pattern?.theme || theme;
+    
+    console.log(`    范式提取: contentId=${effectiveContentId}, slug=${effectiveSlug}, theme=${effectiveTheme}`);
     
     const [coverOk, imgs, audios] = await Promise.all([
       // 下载cover
       coverUrl ? downloadCover(coverUrl, bookDir, book.resourceId).then(() => true).catch(() => false) : Promise.resolve(false),
-      // 下载图片
-      !args.skipImages && contentId ? downloadImages(contentId, imgDir) : Promise.resolve(0),
-      // 下载音频
-      !args.skipAudio && slug && theme && contentId ? downloadAudio(contentId, slug, theme, audioDir) : Promise.resolve(0),
+      // 下载图片 - 优先按范式下载完整系列（p0-pN直到404），回退到拦截URL直接下载
+      !args.skipImages && effectiveContentId
+        ? downloadImages(effectiveContentId, imgDir)
+        : (!args.skipImages && info.interceptedImgUrls && info.interceptedImgUrls.length > 0
+          ? downloadFromUrls(info.interceptedImgUrls, imgDir, 'page-', '.jpg')
+          : Promise.resolve(0)),
+      // 下载音频 - 优先按范式下载完整系列（title+p1-pN直到404），回退到拦截URL直接下载
+      !args.skipAudio && effectiveContentId && effectiveSlug && effectiveTheme
+        ? downloadAudio(effectiveContentId, effectiveSlug, effectiveTheme, audioDir)
+        : (!args.skipAudio && info.interceptedMp3Urls && info.interceptedMp3Urls.length > 0
+          ? downloadFromUrls(info.interceptedMp3Urls, audioDir, '', '.mp3')
+          : Promise.resolve(0)),
     ]);
     
     imgCount = imgs;
