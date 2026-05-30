@@ -24,21 +24,14 @@ Thumbs.db
 
 # Sensitive data - DO NOT COMMIT
 cookies/
-data/probe/probe-results.json
-data/probe/probe-failed.json
-data/probe/probe-live.json
-data/probe/all-class-students.json
-data/probe/students-by-level.json
-data/probe/students-by-level.txt
-data/probe/probe-results.xlsx
-data/probe/probe-results.csv
-data/probe/analysis-report.md
+data/probe/
+data/cookies/
 data/booklists/*.json
 data/download-progress-v2.json
 zx-pics/
 
-# Downloaded resources (copyrighted content)
-downloads/
+# Internal docs
+docs/
 
 # Debug/temp files
 debug-*.png
@@ -60,8 +53,6 @@ books-update.sql
 worker/.wrangler/
 worker/tmp/
 
-# Keep these (public versions / placeholders)
-!data/probe/probe-results.public.json
+# Keep placeholders
 !data/booklists/.gitkeep
 !data/cookies/.gitkeep
-!downloads/.gitkeep
