@@ -22,24 +22,8 @@ Thumbs.db
 *.bak.ts
 *.bak.js
 
-# Sensitive data - DO NOT COMMIT
-cookies/
-data/probe/
-data/cookies/
-data/booklists/*.json
-data/download-progress-v2.json
-data/quiz-results/
-data/reports/
-data/audio-files-check.json
-data/audio-summary.json
-data/download-new-books.log
-data/kidsa-z.db
-data/mismatch-*.log
-data/probe-results.json
-data/reading-room-books.json
-data/search-*.log
-data/student-passwords.json
-zx-pics/
+# Data directory - DO NOT COMMIT
+data/
 
 # Key generation scripts - DO NOT COMMIT (contains key algorithm)
 generate-key.bat
@@ -70,7 +54,3 @@ books-update.sql
 # Worker build cache
 worker/.wrangler/
 worker/tmp/
-
-# Keep placeholders
-!data/booklists/.gitkeep
-!data/cookies/.gitkeep
