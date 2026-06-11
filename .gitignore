@@ -25,11 +25,25 @@ Thumbs.db
 # Data directory - DO NOT COMMIT
 data/
 
+# Downloaded resources - DO NOT COMMIT
+downloads/
+
 # Scripts directory - DO NOT COMMIT
 scripts/
 
 # Source code - DO NOT COMMIT
 src/
+
+# Reader server - DO NOT COMMIT
+reader/
+
+# Cloudflare Worker - DO NOT COMMIT
+worker/
+
+# Node.js project files - DO NOT COMMIT
+package.json
+package-lock.json
+tsconfig.json
 
 # Key generation scripts - DO NOT COMMIT (contains key algorithm)
 generate-key.bat
@@ -57,6 +71,5 @@ website-test-report.json
 books-update.sql
 .history.md
 
-# Worker build cache
-worker/.wrangler/
-worker/tmp/
+# Temp git repo
+_gh_temp/
