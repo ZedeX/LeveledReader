@@ -25,6 +25,9 @@ Thumbs.db
 # Data directory - DO NOT COMMIT
 data/
 
+# Scripts directory - DO NOT COMMIT
+scripts/
+
 # Key generation scripts - DO NOT COMMIT (contains key algorithm)
 generate-key.bat
 generate-key.ps1
