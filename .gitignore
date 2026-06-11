@@ -28,7 +28,26 @@ data/probe/
 data/cookies/
 data/booklists/*.json
 data/download-progress-v2.json
+data/quiz-results/
+data/reports/
+data/audio-files-check.json
+data/audio-summary.json
+data/download-new-books.log
+data/kidsa-z.db
+data/mismatch-*.log
+data/probe-results.json
+data/reading-room-books.json
+data/search-*.log
+data/student-passwords.json
 zx-pics/
+
+# Key generation scripts - DO NOT COMMIT (contains key algorithm)
+generate-key.bat
+generate-key.ps1
+rsa_private.pem
+rsa_public.pem
+qrcode.jpg
+wechat_qr.png
 
 # Internal docs
 docs/
@@ -36,7 +55,6 @@ docs/
 # Debug/temp files
 debug-*.png
 debug-*.html
-reader.html
 intercepted-urls.txt
 all-download-urls.txt
 missing-files.txt
