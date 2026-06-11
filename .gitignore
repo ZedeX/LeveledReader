@@ -28,6 +28,9 @@ data/
 # Scripts directory - DO NOT COMMIT
 scripts/
 
+# Source code - DO NOT COMMIT
+src/
+
 # Key generation scripts - DO NOT COMMIT (contains key algorithm)
 generate-key.bat
 generate-key.ps1
