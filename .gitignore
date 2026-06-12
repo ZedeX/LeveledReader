@@ -25,8 +25,8 @@ Thumbs.db
 # Data directory - DO NOT COMMIT
 data/
 
-# Downloaded resources - DO NOT COMMIT
-downloads/
+# Downloaded resources - exclude meta.json only
+downloads/**/meta.json
 
 # Scripts directory - DO NOT COMMIT
 scripts/
