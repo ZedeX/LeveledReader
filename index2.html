@@ -1421,8 +1421,24 @@
 <body>
   <!-- Key Verification Overlay -->
   <div class="key-overlay" id="keyOverlay">
-    <!-- Page 1: Verification -->
+    <!-- Page 1: Preview books (shown first) -->
     <div class="key-page" id="keyPage1">
+    <div class="preview-section" id="previewSection">
+      <h3>试读精选</h3>
+      <div class="preview-sub">免费体验部分书籍，解锁后可阅读全部</div>
+      <div class="carousel-wrap" id="carouselWrap">
+        <div class="carousel-track" id="carouselTrack"></div>
+      </div>
+      <div class="carousel-dots" id="carouselDots"></div>
+    </div>
+    <!-- Scroll hint -->
+    <div class="scroll-hint" id="scrollHint">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
+      向下滚动，解锁全部书籍
+    </div>
+    </div><!-- /key-page1 -->
+    <!-- Page 2: Verification -->
+    <div class="key-page" id="keyPage2">
     <div class="key-card">
       <h2>访问验证</h2>
       <div class="key-sub">请输入访问密钥以继续阅读</div>
@@ -1438,24 +1454,8 @@
         <img id="qrCodeImg"
           src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAGQAQMAAAC6caSPAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACG0lEQVR4nO3cO27DMAwGYAYdMvYIOYqPZh8tR/ERMnYIzJoPUZTboRmMMsDPpYakzxMtUI+U6PWYucciDdNGV15pfmo3f9GNl480aAMBOZ88W4Jq10OIPO/xGNpbGoOAVCWf0q9J7s2a/EZa8u+vklErCMg7EJ2u0zQ+sb0DBOQfCe3PdxkTz39IfhCQIsTDk/9+YY9xTvYAASlKuEerk30az8nfAwSkJDmET+k9rvKq4ygQkHNJy2TJWA2dk9eoOviY1SAgpQnHKs/mZPKa2TclJCzzNxCQisTCauNeXWjoKk8/CvsQaAgQkPOIb51pRTH7OUUqeimWdRybFSAgBQlRqyLYk3w8ffP5WYI5nkFAyhHdRrM2216LLTVp5xQ2ZgMBqUhm7RoLkuPU3fmqCgTkZEL5PMKXb7lda+aok626AAEpSCQmbsnvCU9RJ6dNCe4FCQhINTLHOTINd3gon7hZ2EpwAwEpSjzJOS605xUf2S6cxjWSHwTkfMJ+pUEGttO3cSMiX0UDAalK9mH9OGNrXTHMw2rmDQSkIhki18ncnn2VN3kDCMj5pHVJLGlTIm9ELLkYJhCQkiTfTte/F03+gcjDFFtqICA1Sf7tW9znWeJU7ta+jcZBQN6E6Iov3+2xr8Paf/zwEwTkfNLC+KG6+D2TQUBKEI9O8jUzX/H114KA1CTcY8n/8MHbdB/DP5DfF4kgIBXI6/ENowsLuI0aPi0AAAAASUVORK5CYII="
           alt="QR" style="width:140px;height:140px;border-radius:8px;display:inline-block">
-        <div style="font-size:14px;color:#999;margin-top:6px">获取密钥请<strong>扫码</strong>添加小助手</div>
+        <div style="font-size:14px;color:#999;margin-top:6px">获取密钥请<strong>微信扫码</strong>添加小助手</div>
       </div>
-    </div>
-    <!-- Scroll hint -->
-    <div class="scroll-hint" id="scrollHint">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12l7 7 7-7"/></svg>
-      向下滚动，试读精选书籍
-    </div>
-    </div><!-- /key-page1 -->
-    <!-- Page 2: Preview books -->
-    <div class="key-page" id="keyPage2">
-    <div class="preview-section" id="previewSection">
-      <h3>试读精选</h3>
-      <div class="preview-sub">免费体验部分书籍，解锁后可阅读全部</div>
-      <div class="carousel-wrap" id="carouselWrap">
-        <div class="carousel-track" id="carouselTrack"></div>
-      </div>
-      <div class="carousel-dots" id="carouselDots"></div>
     </div>
     </div><!-- /key-page2 -->
   </div>
@@ -1530,7 +1530,7 @@
           <button class="key-submit" onclick="submitLimitKey()">验证</button>
           <div style="margin-top:16px;text-align:center">
             <img id="limitQrImg" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAGQAQMAAAC6caSPAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACG0lEQVR4nO3cO27DMAwGYAYdMvYIOYqPZh8tR/ERMnYIzJoPUZTboRmMMsDPpYakzxMtUI+U6PWYucciDdNGV15pfmo3f9GNl480aAMBOZ88W4Jq10OIPO/xGNpbGoOAVCWf0q9J7s2a/EZa8u+vklErCMg7EJ2u0zQ+sb0DBOQfCe3PdxkTz39IfhCQIsTDk/9+YY9xTvYAASlKuEerk30az8nfAwSkJDmET+k9rvKq4ygQkHNJy2TJWA2dk9eoOviY1SAgpQnHKs/mZPKa2TclJCzzNxCQisTCauNeXWjoKk8/CvsQaAgQkPOIb51pRTH7OUUqeimWdRybFSAgBQlRqyLYk3w8ffP5WYI5nkFAyhHdRrM2216LLTVp5xQ2ZgMBqUhm7RoLkuPU3fmqCgTkZEL5PMKXb7lda+aok626AAEpSCQmbsnvCU9RJ6dNCe4FCQhINTLHOTINd3gon7hZ2EpwAwEpSjzJOS605xUf2S6cxjWSHwTkfMJ+pUEGttO3cSMiX0UDAalK9mH9OGNrXTHMw2rmDQSkIhki18ncnn2VN3kDCMj5pHVJLGlTIm9ELLkYJhCQkiTfTte/F03+gcjDFFtqICA1Sf7tW9znWeJU7ta+jcZBQN6E6Iov3+2xr8Paf/zwEwTkfNLC+KG6+D2TQUBKEI9O8jUzX/H114KA1CTcY8n/8MHbdB/DP5DfF4kgIBXI6/ENowsLuI0aPi0AAAAASUVORK5CYII=" alt="QR" style="width:140px;height:140px;border-radius:8px;display:inline-block">
-            <div style="font-size:14px;color:#999;margin-top:6px">获取密钥请<strong>扫码</strong>添加小助手</div>
+            <div style="font-size:14px;color:#999;margin-top:6px">获取密钥请<strong>微信扫码</strong>添加小助手</div>
           </div>
           <button class="limit-close" onclick="hideLimitOverlay()">返回试读</button>
         </div>
@@ -1663,14 +1663,35 @@
       document.getElementById('keyError').textContent = '';
       var qrImg = document.getElementById('qrCodeImg');
       if (qrImg && !qrImg.src) qrImg.src = QR_CODE_B64;
-      setTimeout(function () { document.getElementById('keyInput').focus(); }, 300);
+      // Scroll to top (preview page) by default
+      var overlay = document.getElementById('keyOverlay');
+      if (overlay) overlay.scrollTop = 0;
     }
+    // Auto-focus keyInput when user scrolls to verification page
+    (function () {
+      var keyOverlayEl = document.getElementById('keyOverlay');
+      var keyInputFocused = false;
+      if (keyOverlayEl) {
+        keyOverlayEl.addEventListener('scroll', function () {
+          var page2 = document.getElementById('keyPage2');
+          if (!page2 || keyInputFocused) return;
+          if (keyOverlayEl.scrollTop >= page2.offsetTop - 100) {
+            keyInputFocused = true;
+            setTimeout(function () {
+              document.getElementById('keyInput').focus();
+              // Reset after a while so it can focus again if needed
+              setTimeout(function () { keyInputFocused = false; }, 2000);
+            }, 300);
+          }
+        });
+      }
+    })();
     function hideKeyOverlay() {
       document.getElementById('keyOverlay').classList.remove('open');
       // Hide preview page for verified users
-      var p2 = document.getElementById('keyPage2');
+      var p1 = document.getElementById('keyPage1');
       var sh = document.getElementById('scrollHint');
-      if (p2) p2.style.display = 'none';
+      if (p1) p1.style.display = 'none';
       if (sh) sh.style.display = 'none';
     }
     function submitKey() {
@@ -1789,9 +1810,9 @@
           var mc = document.getElementById('mainContainer');
           if (mc) mc.style.display = '';
           // Hide preview page for verified users
-          var p2 = document.getElementById('keyPage2');
+          var p1 = document.getElementById('keyPage1');
           var sh = document.getElementById('scrollHint');
-          if (p2) p2.style.display = 'none';
+          if (p1) p1.style.display = 'none';
           if (sh) sh.style.display = 'none';
         } else {
           // Need to re-verify with time window
@@ -1812,9 +1833,9 @@
           var mc = document.getElementById('mainContainer');
           if (mc) mc.style.display = '';
           // Hide preview page for verified users
-          var p2b = document.getElementById('keyPage2');
+          var p1b = document.getElementById('keyPage1');
           var sh2 = document.getElementById('scrollHint');
-          if (p2b) p2b.style.display = 'none';
+          if (p1b) p1b.style.display = 'none';
           if (sh2) sh2.style.display = 'none';
         }
       } catch (e) {
@@ -2014,7 +2035,7 @@
 
     function hideLimitOverlay() {
       document.getElementById('limitOverlay').classList.remove('open');
-      // Go back to preview shelf (keyPage2)
+      // Go back to preview shelf (keyPage1)
       previewMode = false;
       previewMaxPage = -1;
       // Close reader directly (without calling hideLimitOverlay again)
@@ -2043,10 +2064,10 @@
 
     function scrollToPreviewPage() {
       var overlay = document.getElementById('keyOverlay');
-      var page2 = document.getElementById('keyPage2');
-      if (overlay && page2) {
+      var page1 = document.getElementById('keyPage1');
+      if (overlay && page1) {
         setTimeout(function () {
-          overlay.scrollTop = page2.offsetTop;
+          overlay.scrollTop = page1.offsetTop;
         }, 100);
       }
     }
@@ -2079,9 +2100,9 @@
       var mc = document.getElementById('mainContainer');
       if (mc) mc.style.display = '';
       // Hide preview page
-      var p2 = document.getElementById('keyPage2');
+      var p1 = document.getElementById('keyPage1');
       var sh = document.getElementById('scrollHint');
-      if (p2) p2.style.display = 'none';
+      if (p1) p1.style.display = 'none';
       if (sh) sh.style.display = 'none';
     }
 
@@ -2665,7 +2686,7 @@
           bgPreloader.start();
         }
       });
-      // Render preview cards even if not verified (for key-overlay page 2)
+      // Render preview cards even if not verified (for key-overlay page 1)
       renderPreviewCards();
       // Show main container if access was already granted by early verification
       var mc = document.getElementById('mainContainer');
