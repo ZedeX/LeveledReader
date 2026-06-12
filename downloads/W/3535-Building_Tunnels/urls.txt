@@ -1,0 +1,29 @@
+# Building Tunnels (rid 3535) Level W CDN URLs
+# Theme: lq39
+# Activity: https://www.kidsa-z.com/main/Activity/id/32715/collectionId/1
+
+# Audio:
+https://mi.content.kidsa-z.com/audio/3535/raz_buildingtunnels_lq39_title_text.mp3
+
+# Images:
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-0.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-1.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-2.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-3.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-4.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-5.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-6.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-7.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-8.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-9.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-10.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-11.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-12.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-13.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-14.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-15.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-16.jpg
+https://mi.content.kidsa-z.com/readonly/3535/projectable/large/1/book/page-17.jpg
+
+# Cover:
+https://mi.content.kidsa-z.com/resource-cards/books/190/3535.png
