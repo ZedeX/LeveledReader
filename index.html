@@ -1786,6 +1786,18 @@
       return true;
     }
 
+    function isAccessVerified() {
+      var saved = localStorage.getItem(AK_KEY);
+      if (!saved) return false;
+      try {
+        var data = JSON.parse(saved);
+        if (data.verified) return true;
+        return false;
+      } catch (e) {
+        return false;
+      }
+    }
+
 
     // ========== Early Access Check ==========
     // Run verification immediately - don't wait for DATA
@@ -2055,9 +2067,11 @@
           nextBtns[bi].style.background = '';
         }
       }
-      // Show key overlay and scroll to preview page
-      showKeyOverlay();
-      scrollToPreviewPage();
+      // Show key overlay and scroll to preview page (only if not verified)
+      if (!isAccessVerified()) {
+        showKeyOverlay();
+        scrollToPreviewPage();
+      }
     }
 
     function scrollToPreviewPage() {
@@ -2890,8 +2904,8 @@
       previewMode = false;
       previewMaxPage = -1;
       hideLimitOverlay();
-      // If was preview mode, show key overlay and scroll to preview page
-      if (wasPreview) { showKeyOverlay(); scrollToPreviewPage(); }
+      // If was preview mode and not verified, show key overlay and scroll to preview page
+      if (wasPreview && !isAccessVerified()) { showKeyOverlay(); scrollToPreviewPage(); }
       // Reset next button text
       var nextBtns = document.querySelectorAll('.ctrl-btn');
       for (var bi = 0; bi < nextBtns.length; bi++) {
@@ -3103,15 +3117,24 @@
       });
       document.getElementById('playBtn').textContent = '▶️';
       if (autoPlay) {
-        if (audioEl.readyState >= 2) {
-          audioEl.play().catch(function () { });
-        } else {
-          audioEl.addEventListener('canplay', function onCanPlay() {
-            audioEl.removeEventListener('canplay', onCanPlay);
-            if (audioLoadId !== myLoadId) return;
-            audioEl.play().catch(function () { });
-          });
+        function tryAutoPlay() {
+          if (audioLoadId !== myLoadId) return;
+          if (!audioEl) return;
+          if (audioEl.readyState >= 2) {
+            audioEl.play().catch(function () {
+              setTimeout(tryAutoPlay, 300);
+            });
+          } else {
+            audioEl.addEventListener('canplay', function onCanPlay() {
+              audioEl.removeEventListener('canplay', onCanPlay);
+              if (audioLoadId !== myLoadId) return;
+              audioEl.play().catch(function () {
+                setTimeout(tryAutoPlay, 300);
+              });
+            });
+          }
         }
+        tryAutoPlay();
       }
     }
 

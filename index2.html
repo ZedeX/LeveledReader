@@ -1558,6 +1558,17 @@ return false;
 }
 return true;
 }
+function isAccessVerified() {
+var saved = localStorage.getItem(AK_KEY);
+if (!saved) return false;
+try {
+var data = JSON.parse(saved);
+if (data.verified) return true;
+return false;
+} catch (e) {
+return false;
+}
+}
 (function () {
 var saved = localStorage.getItem(AK_KEY);
 if (!saved) {
@@ -1798,8 +1809,10 @@ nextBtns[bi].textContent = '下一页 ▶';
 nextBtns[bi].style.background = '';
 }
 }
+if (!isAccessVerified()) {
 showKeyOverlay();
 scrollToPreviewPage();
+}
 }
 function scrollToPreviewPage() {
 var overlay = document.getElementById('keyOverlay');
@@ -2522,7 +2535,7 @@ var wasPreview = previewMode;
 previewMode = false;
 previewMaxPage = -1;
 hideLimitOverlay();
-if (wasPreview) { showKeyOverlay(); scrollToPreviewPage(); }
+if (wasPreview && !isAccessVerified()) { showKeyOverlay(); scrollToPreviewPage(); }
 var nextBtns = document.querySelectorAll('.ctrl-btn');
 for (var bi = 0; bi < nextBtns.length; bi++) {
 if (nextBtns[bi].textContent.indexOf('解锁') >= 0) {
@@ -2712,15 +2725,24 @@ if (autoPlay) { clearTimeout(autoPageTimer); autoPageTimer = setTimeout(nextPage
 });
 document.getElementById('playBtn').textContent = '▶️';
 if (autoPlay) {
+function tryAutoPlay() {
+if (audioLoadId !== myLoadId) return;
+if (!audioEl) return;
 if (audioEl.readyState >= 2) {
-audioEl.play().catch(function () { });
+audioEl.play().catch(function () {
+setTimeout(tryAutoPlay, 300);
+});
 } else {
 audioEl.addEventListener('canplay', function onCanPlay() {
 audioEl.removeEventListener('canplay', onCanPlay);
 if (audioLoadId !== myLoadId) return;
-audioEl.play().catch(function () { });
+audioEl.play().catch(function () {
+setTimeout(tryAutoPlay, 300);
+});
 });
 }
+}
+tryAutoPlay();
 }
 }
 function toggleAudio() {
