@@ -2008,8 +2008,18 @@ document.addEventListener('error', function(e) {
   var src = el.src;
   if (!src || src === location.href || src.indexOf('about:') === 0) return;
   if (!currentBook) return;
-  var nextUrl = tryNextFallback(el, currentBook, src, 'cover', null);
-  if (!nextUrl) nextUrl = tryNextFallback(el, currentBook, src, 'page', parseInt((src.match(/page-(\d+)/) || [])[1]));
+  // Determine URL type from the failed URL pattern
+  var urlType, extraData;
+  if (src.indexOf('/cover-') !== -1) {
+    urlType = 'cover';
+    extraData = null;
+  } else if (src.indexOf('/page-') !== -1) {
+    urlType = 'page';
+    extraData = parseInt((src.match(/page-(\d+)/) || [])[1]);
+  } else {
+    return; // Not a book resource URL
+  }
+  var nextUrl = tryNextFallback(el, currentBook, src, urlType, extraData);
   if (nextUrl) el.src = nextUrl;
 }, true);
 
@@ -2347,8 +2357,9 @@ document.addEventListener('error', function(e) {
         while (self.coverIdx < self.books.length) {
           var book = self.books[self.coverIdx];
           self.coverIdx++;
-          if (buildCoverUrl(book) && !self.fetchedUrls.has(buildCoverUrl(book))) {
-            return buildCoverUrl(book);
+          var cUrl = buildCoverUrl(book);
+          if (cUrl && !self.fetchedUrls.has(cUrl)) {
+            return cUrl;
           }
         }
         // All covers done, move to pages phase
@@ -2901,7 +2912,7 @@ document.addEventListener('error', function(e) {
       // Prioritize covers for the selected level
       if (bgPreloader && level) {
         var urls = [];
-        filteredBooks.forEach(function (b) { if (b.coverUrl) urls.push(b.coverUrl); });
+        filteredBooks.forEach(function (b) { var cu = buildCoverUrl(b); if (cu) urls.push(cu); });
         bgPreloader.addPriority(urls);
       }
     }
