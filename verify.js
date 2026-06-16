@@ -7,6 +7,113 @@
     var QR_CODE_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAGQAQMAAAC6caSPAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACG0lEQVR4nO3cO27DMAwGYAYdMvYIOYqPZh8tR/ERMnYIzJoPUZTboRmMMsDPpYakzxMtUI+U6PWYucciDdNGV15pfmo3f9GNl480aAMBOZ88W4Jq10OIPO/xGNpbGoOAVCWf0q9J7s2a/EZa8u+vklErCMg7EJ2u0zQ+sb0DBOQfCe3PdxkTz39IfhCQIsTDk/9+YY9xTvYAASlKuEerk30az8nfAwSkJDmET+k9rvKq4ygQkHNJy2TJWA2dk9eoOviY1SAgpQnHKs/mZPKa2TclJCzzNxCQisTCauNeXWjoKk8/CvsQaAgQkPOIb51pRTH7OUUqeimWdRybFSAgBQlRqyLYk3w8ffP5WYI5nkFAyhHdRrM2216LLTVp5xQ2ZgMBqUhm7RoLkuPU3fmqCgTkZEL5PMKXb7lda+aok626AAEpSCQmbsnvCU9RJ6dNCe4FCQhINTLHOTINd3gon7hZ2EpwAwEpSjzJOS605xUf2S6cxjWSHwTkfMJ+pUEGttO3cSMiX0UDAalK9mH9OGNrXTHMw2rmDQSkIhki18ncnn2VN3kDCMj5pHVJLGlTIm9ELLkYJhCQkiTfTte/F03+gcjDFFtqICA1Sf7tW9znWeJU7ta+jcZBQN6E6Iov3+2xr8Paf/zwEwTkfNLC+KG6+D2TQUBKEI9O8jUzX/H114KA1CTcY8n/8MHbdB/DP5DfF4kgIBXI6/ENowsLuI0aPi0AAAAASUVORK5CYII=';
 
     // ========== Device Parameters (Stable, Unique) ==========
+    // DJB2 hash helper
+    function djb2Hash(str) {
+      var hash = 0;
+      for (var i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    }
+
+    // Canvas fingerprint: render text+shapes, hash pixel data
+    function getCanvasFingerprint() {
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = 240;
+        canvas.height = 60;
+        var ctx = canvas.getContext('2d');
+        if (!ctx) return '';
+        // Draw background gradient
+        var grad = ctx.createLinearGradient(0, 0, 240, 60);
+        grad.addColorStop(0, '#f60');
+        grad.addColorStop(1, '#06f');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 240, 60);
+        // Draw text with specific font settings
+        ctx.textBaseline = 'top';
+        ctx.font = '16px "Arial"';
+        ctx.fillStyle = '#fff';
+        ctx.fillText('RazReader fp test 📖', 4, 4);
+        ctx.font = '12px "Courier New"';
+        ctx.fillStyle = '#0f0';
+        ctx.fillText('CanvasFP v2.0', 4, 30);
+        // Draw a circle
+        ctx.beginPath();
+        ctx.arc(200, 30, 15, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ff0';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Hash the pixel data
+        var imageData = ctx.getImageData(0, 0, 240, 60).data;
+        return djb2Hash(String.fromCharCode.apply(null, imageData.subarray(0, 2400))).toString(16);
+      } catch (e) {
+        return '';
+      }
+    }
+
+    // Audio fingerprint: oscillator+analyser, hash frequency data
+    function getAudioFingerprint() {
+      try {
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return '';
+        var ctx = new AudioCtx();
+        var osc = ctx.createOscillator();
+        var analyser = ctx.createAnalyser();
+        var gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = 1000;
+        gain.gain.value = 0;
+        osc.connect(analyser);
+        analyser.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        var data = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatFrequencyData(data);
+        osc.stop();
+        ctx.close();
+        // Hash first 100 values
+        var str = '';
+        for (var i = 0; i < 100; i++) str += data[i].toFixed(6);
+        return djb2Hash(str).toString(16);
+      } catch (e) {
+        return '';
+      }
+    }
+
+    // WebGL fingerprint: GPU renderer + key parameters
+    function getWebGLFingerprint() {
+      try {
+        var canvas = document.createElement('canvas');
+        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (!gl) return '';
+        var parts = [];
+        // GPU renderer
+        var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+        if (debugInfo) {
+          parts.push(gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '');
+          parts.push(gl.getParameter(debugInfo.UNMASKED_VENDOR_WEBGL) || '');
+        }
+        // Key WebGL parameters that vary by driver/hardware
+        parts.push(gl.getParameter(gl.MAX_TEXTURE_SIZE));
+        parts.push(gl.getParameter(gl.MAX_VIEWPORT_DIMS).join('x'));
+        parts.push(gl.getParameter(gl.MAX_RENDERBUFFER_SIZE));
+        parts.push(gl.getParameter(gl.MAX_VERTEX_ATTRIBS));
+        parts.push(gl.getParameter(gl.MAX_VARYING_VECTORS));
+        parts.push(gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS));
+        parts.push(gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS));
+        parts.push(gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE).join('x'));
+        parts.push(gl.getParameter(gl.ALIASED_POINT_SIZE_RANGE).join('x'));
+        // Extensions list
+        var exts = gl.getSupportedExtensions() || [];
+        parts.push(exts.sort().join(','));
+        return djb2Hash(parts.join('|')).toString(16);
+      } catch (e) {
+        return '';
+      }
+    }
+
     function getDeviceParams() {
       // Core hardware params (widely supported, stable)
       var cpuCores = navigator.hardwareConcurrency || 0;
@@ -14,7 +121,7 @@
       var lang = navigator.language || '';
       var langs = (navigator.languages && navigator.languages.join(',')) || lang;
       
-      // Precise timezone (more unique than offset)
+      // Precise timezone
       var tz = '';
       try {
         tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
@@ -22,27 +129,13 @@
         tz = String(new Date().getTimezoneOffset());
       }
       
-      // WebGL GPU info (optional, graceful fallback)
-      var gpu = '';
-      try {
-        var canvas = document.createElement('canvas');
-        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-        if (gl) {
-          var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
-          if (debugInfo) {
-            gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
-          }
-        }
-      } catch (e) {
-        // WebGL not supported, gracefully skip
-      }
-      
-      // Platform info (fallback for GPU)
+      // Platform info (fallback)
       var platform = navigator.platform || '';
       
-      // Build fingerprint string
-      // If GPU detected, use it; otherwise use platform as fallback
-      var hwId = gpu || platform;
+      // Advanced fingerprints (each with graceful fallback)
+      var canvasFp = getCanvasFingerprint();
+      var audioFp = getAudioFingerprint();
+      var webglFp = getWebGLFingerprint();
       
       return {
         ua: navigator.userAgent || '',
@@ -50,12 +143,15 @@
         touchPoints: touchPoints,
         langs: langs,
         tz: tz,
-        hwId: hwId
+        platform: platform,
+        canvasFp: canvasFp,
+        audioFp: audioFp,
+        webglFp: webglFp
       };
     }
     
     function buildFingerprintString(params) {
-      return params.ua + '|' + params.cpuCores + '|' + params.touchPoints + '|' + params.langs + '|' + params.tz + '|' + params.hwId;
+      return params.ua + '|' + params.cpuCores + '|' + params.touchPoints + '|' + params.langs + '|' + params.tz + '|' + params.platform + '|' + params.canvasFp + '|' + params.audioFp + '|' + params.webglFp;
     }
 
     function getTimeSlot() {
@@ -124,28 +220,6 @@
       var dc1 = generateDeviceCodeForSlot(getTimeSlot() - 1);
       if (validateKey(key, dc1)) return dc1;
       return null;
-    }
-
-    function generateKeyForDevice(deviceCode) {
-      var data = '';
-      for (var i = 0; i < 6; i++) {
-        data += CHARS[Math.floor(Math.random() * 36)];
-      }
-      var sumA = 0;
-      var xorVal = 0;
-      for (var i = 0; i < 6; i++) {
-        var idx = CHARS.indexOf(data[i]);
-        sumA += idx * (i + 3);
-        xorVal ^= (idx * 7 + i * 13) & 0xFF;
-      }
-      var checkA = sumA % 36;
-      var dcSum = 0;
-      for (var j = 0; j < deviceCode.length; j++) {
-        dcSum += deviceCode.charCodeAt(j) * (j + 1);
-      }
-      var checkB = (xorVal ^ (dcSum & 0xFF)) % 36;
-      if (checkB < 0) checkB += 36;
-      return data + CHARS[checkA] + CHARS[checkB];
     }
 
     // ========== Key Overlay ==========
