@@ -6,13 +6,66 @@
     var TIME_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
     var QR_CODE_B64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAZAAAAGQAQMAAAC6caSPAAAABlBMVEX///8AAABVwtN+AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACG0lEQVR4nO3cO27DMAwGYAYdMvYIOYqPZh8tR/ERMnYIzJoPUZTboRmMMsDPpYakzxMtUI+U6PWYucciDdNGV15pfmo3f9GNl480aAMBOZ88W4Jq10OIPO/xGNpbGoOAVCWf0q9J7s2a/EZa8u+vklErCMg7EJ2u0zQ+sb0DBOQfCe3PdxkTz39IfhCQIsTDk/9+YY9xTvYAASlKuEerk30az8nfAwSkJDmET+k9rvKq4ygQkHNJy2TJWA2dk9eoOviY1SAgpQnHKs/mZPKa2TclJCzzNxCQisTCauNeXWjoKk8/CvsQaAgQkPOIb51pRTH7OUUqeimWdRybFSAgBQlRqyLYk3w8ffP5WYI5nkFAyhHdRrM2216LLTVp5xQ2ZgMBqUhm7RoLkuPU3fmqCgTkZEL5PMKXb7lda+aok626AAEpSCQmbsnvCU9RJ6dNCe4FCQhINTLHOTINd3gon7hZ2EpwAwEpSjzJOS605xUf2S6cxjWSHwTkfMJ+pUEGttO3cSMiX0UDAalK9mH9OGNrXTHMw2rmDQSkIhki18ncnn2VN3kDCMj5pHVJLGlTIm9ELLkYJhCQkiTfTte/F03+gcjDFFtqICA1Sf7tW9znWeJU7ta+jcZBQN6E6Iov3+2xr8Paf/zwEwTkfNLC+KG6+D2TQUBKEI9O8jUzX/H114KA1CTcY8n/8MHbdB/DP5DfF4kgIBXI6/ENowsLuI0aPi0AAAAASUVORK5CYII=';
 
+    // ========== Device Parameters (Stable, Unique) ==========
+    function getDeviceParams() {
+      // Core hardware params (widely supported, stable)
+      var cpuCores = navigator.hardwareConcurrency || 0;
+      var touchPoints = navigator.maxTouchPoints || 0;
+      var lang = navigator.language || '';
+      var langs = (navigator.languages && navigator.languages.join(',')) || lang;
+      
+      // Precise timezone (more unique than offset)
+      var tz = '';
+      try {
+        tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+      } catch (e) {
+        tz = String(new Date().getTimezoneOffset());
+      }
+      
+      // WebGL GPU info (optional, graceful fallback)
+      var gpu = '';
+      try {
+        var canvas = document.createElement('canvas');
+        var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+        if (gl) {
+          var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+          if (debugInfo) {
+            gpu = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL) || '';
+          }
+        }
+      } catch (e) {
+        // WebGL not supported, gracefully skip
+      }
+      
+      // Platform info (fallback for GPU)
+      var platform = navigator.platform || '';
+      
+      // Build fingerprint string
+      // If GPU detected, use it; otherwise use platform as fallback
+      var hwId = gpu || platform;
+      
+      return {
+        ua: navigator.userAgent || '',
+        cpuCores: cpuCores,
+        touchPoints: touchPoints,
+        langs: langs,
+        tz: tz,
+        hwId: hwId
+      };
+    }
+    
+    function buildFingerprintString(params) {
+      return params.ua + '|' + params.cpuCores + '|' + params.touchPoints + '|' + params.langs + '|' + params.tz + '|' + params.hwId;
+    }
+
     function getTimeSlot() {
       return Math.floor(Date.now() / TIME_WINDOW_MS);
     }
 
     function generateDeviceCode() {
       var timeSlot = getTimeSlot();
-      var raw = navigator.userAgent + '|' + screen.width + 'x' + screen.height + '|' + navigator.language + '|' + new Date().getTimezoneOffset() + '|' + timeSlot;
+      var params = getDeviceParams();
+      var raw = buildFingerprintString(params) + '|' + timeSlot;
       var hash = 0;
       for (var i = 0; i < raw.length; i++) {
         hash = ((hash << 5) - hash) + raw.charCodeAt(i);
@@ -24,7 +77,8 @@
     }
 
     function generateDeviceCodeForSlot(slot) {
-      var raw = navigator.userAgent + '|' + screen.width + 'x' + screen.height + '|' + navigator.language + '|' + new Date().getTimezoneOffset() + '|' + slot;
+      var params = getDeviceParams();
+      var raw = buildFingerprintString(params) + '|' + slot;
       var hash = 0;
       for (var i = 0; i < raw.length; i++) {
         hash = ((hash << 5) - hash) + raw.charCodeAt(i);
@@ -191,7 +245,8 @@
 
     // ========== Access Check ==========
     function getDeviceFingerprint() {
-      return navigator.userAgent + '|' + screen.width + 'x' + screen.height + '|' + navigator.language + '|' + new Date().getTimezoneOffset();
+      var params = getDeviceParams();
+      return buildFingerprintString(params);
     }
 
     function checkAccess() {
