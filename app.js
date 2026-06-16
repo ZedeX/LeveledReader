@@ -1087,8 +1087,11 @@ document.addEventListener('error', function(e) {
     }
 
     var DAILY_KEY = 'raz_daily_reads';
+    function getLocalDateKey(d) {
+      return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
     function recordDailyRead() {
-      var today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      var today = getLocalDateKey(new Date()); // Local YYYY-MM-DD
       var data = {};
       try { data = JSON.parse(localStorage.getItem(DAILY_KEY)) || {}; } catch (e) {}
       data[today] = (data[today] || 0) + 1;
@@ -1106,7 +1109,7 @@ document.addEventListener('error', function(e) {
       var streak = 0;
       var d = new Date();
       while (true) {
-        var key = d.toISOString().slice(0, 10);
+        var key = getLocalDateKey(d);
         if (data[key] && data[key] > 0) {
           streak++;
           d.setDate(d.getDate() - 1);
@@ -1136,80 +1139,6 @@ document.addEventListener('error', function(e) {
       _achQueue = [];
     }
 
-    // ========== Achievement Overlay Display ==========
-    function showAchOverlay() {
-      var ach = getAchievements();
-      var completed = getCompletedCount();
-      var totalBooks = DATA.books.length;
-      // Summary
-      var unlockedCount = Object.keys(ach).length;
-      var totalAch = COUNT_MILESTONES.length + LEVEL_ORDER.length + 1;
-      document.getElementById('achSummary').innerHTML =
-        '<div class="stat"><div class="stat-val">' + completed + '</div><div class="stat-lbl">已读完</div></div>' +
-        '<div class="stat"><div class="stat-val">' + totalBooks + '</div><div class="stat-lbl">总书籍</div></div>' +
-        '<div class="stat"><div class="stat-val">' + unlockedCount + '/' + totalAch + '</div><div class="stat-lbl">成就</div></div>';
-      // Sections
-      var html = '';
-      // Count achievements
-      html += '<div class="ach-section"><div class="ach-section-title">📖 阅读数量成就</div><div class="ach-grid">';
-      for (var i = 0; i < COUNT_MILESTONES.length; i++) {
-        var m = COUNT_MILESTONES[i];
-        var key = 'count_' + m;
-        var unlocked = !!ach[key];
-        var color = COUNT_ACH_COLORS[m];
-        var icon = COUNT_ACH_ICONS[m];
-        var name = COUNT_ACH_NAMES[m];
-        html += '<div class="badge ' + (unlocked ? 'unlocked' : 'locked') + '" style="' + (unlocked ? 'background:' + color + '22;border:2px solid ' + color : '') + '">';
-        html += '<div class="badge-icon" style="background:' + (unlocked ? color : '#ccc') + '">' + icon + '</div>';
-        html += '<div class="badge-name">' + name + '</div>';
-        html += '<div class="badge-desc">读完' + m + '本书</div>';
-        if (unlocked && ach[key].date) {
-          var d = new Date(ach[key].date);
-          html += '<div class="badge-date">' + (d.getMonth() + 1) + '/' + d.getDate() + ' 获得</div>';
-        }
-        html += '</div>';
-      }
-      html += '</div></div>';
-      // Level achievements
-      html += '<div class="ach-section"><div class="ach-section-title">🎯 级别通关成就</div><div class="ach-grid">';
-      for (var j = 0; j < LEVEL_ORDER.length; j++) {
-        var lv = LEVEL_ORDER[j];
-        var lvKey = 'level_' + lv;
-        var lvUnlocked = !!ach[lvKey];
-        var lvCount = getLevelCompletedCount(lv);
-        var lvTotal = DATA.books.filter(function (b) { return b.level === lv; }).length;
-        var lvColor = '#4a6fa5';
-        html += '<div class="badge ' + (lvUnlocked ? 'unlocked' : 'locked') + '" style="' + (lvUnlocked ? 'background:' + lvColor + '22;border:2px solid ' + lvColor : '') + '">';
-        html += '<div class="badge-icon" style="background:' + (lvUnlocked ? lvColor : '#ccc') + '">🎯</div>';
-        html += '<div class="badge-name">Level ' + lv + '</div>';
-        html += '<div class="badge-desc">' + lvCount + '/' + lvTotal + '本</div>';
-        if (lvUnlocked && ach[lvKey].date) {
-          var ld = new Date(ach[lvKey].date);
-          html += '<div class="badge-date">' + (ld.getMonth() + 1) + '/' + ld.getDate() + ' 获得</div>';
-        }
-        html += '</div>';
-      }
-      html += '</div></div>';
-      // Lifetime achievement
-      var ltKey = 'lifetime_all';
-      var ltUnlocked = !!ach[ltKey];
-      html += '<div class="ach-section"><div class="ach-section-title">🏅 终极成就</div><div class="ach-grid">';
-      html += '<div class="badge ' + (ltUnlocked ? 'unlocked' : 'locked') + '" style="' + (ltUnlocked ? 'background:#D5000022;border:2px solid #D50000' : '') + '">';
-      html += '<div class="badge-icon" style="background:' + (ltUnlocked ? '#D50000' : '#ccc') + '">🏅</div>';
-      html += '<div class="badge-name">全部读完！</div>';
-      html += '<div class="badge-desc">读完所有' + totalBooks + '本书</div>';
-      if (ltUnlocked && ach[ltKey].date) {
-        var ltd = new Date(ach[ltKey].date);
-        html += '<div class="badge-date">' + (ltd.getMonth() + 1) + '/' + ltd.getDate() + ' 获得</div>';
-      }
-      html += '</div></div></div>';
-      document.getElementById('achSections').innerHTML = html;
-      document.getElementById('achOverlay').classList.add('open');
-    }
-    function hideAchOverlay() {
-      document.getElementById('achOverlay').classList.remove('open');
-    }
-
     // ========== Init/Reset ==========
     function showInitConfirm() {
       document.getElementById('initOverlay').classList.add('open');
@@ -1218,10 +1147,19 @@ document.addEventListener('error', function(e) {
       document.getElementById('initOverlay').classList.remove('open');
     }
     function doReset() {
-      localStorage.removeItem(RS_KEY);
-      localStorage.removeItem(AK_KEY);
-      localStorage.removeItem(UN_KEY);
-      localStorage.removeItem(ACH_KEY);
+      // Clear all raz_* prefixed keys
+      var keysToRemove = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && (k.indexOf('raz_') === 0 || k.indexOf('quiz_') === 0)) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
+      // Clear Cache API
+      if (window.caches && CACHE_NAME) {
+        caches.delete(CACHE_NAME).catch(function () {});
+      }
       if (bgPreloader) { bgPreloader.stop(); bgPreloader = null; }
       if (bookPreloader) { bookPreloader.stop(); bookPreloader = null; }
       hideInitConfirm();
@@ -1265,10 +1203,10 @@ document.addEventListener('error', function(e) {
       renderBooks();
       renderLevelTabs();
       // Update URL hash (preserve level if set)
-      updateHash();
+      updateNavHash();
     }
 
-    function updateHash() {
+    function updateNavHash() {
       var parts = [];
       if (currentLevel) parts.push('level-' + currentLevel);
       if (sortOrder === 'desc') parts.push('sort-desc');
@@ -2398,7 +2336,7 @@ document.addEventListener('error', function(e) {
 
     function hideProfileOverlay() {
       document.getElementById('profileOverlay').classList.remove('active');
-      updateHash();
+      updateNavHash();
     }
 
     // ========== Theme System ==========
