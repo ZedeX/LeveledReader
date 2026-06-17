@@ -125,7 +125,7 @@
     </div>
     <div class="reader-bottom">
       <div class="audio-bar" id="audioBar">
-        <button onclick="toggleAudio()" id="playBtn">🔇</button>
+        <button onclick="togglePlayPause()" id="playBtn">🔇</button>
         <span class="time" id="curTime">0:00</span>
         <input type="range" id="seekBar" min="0" max="100" value="0" oninput="seekAudio(this.value)">
         <span class="time" id="durTime">0:00</span>
@@ -142,7 +142,7 @@
       <div class="sub" id="celebBook"></div>
       <div class="celeb-actions" id="celebActions">
         <button class="celeb-btn celeb-quiz" id="celebQuizBtn" onclick="openQuiz()" style="display:none">做Quiz</button>
-        <button class="celeb-btn" onclick="closeCelebration()">继续阅读</button>
+        <button class="celeb-btn" onclick="closeCelebration()">返回书架</button>
       </div>
     </div>
   </div>
