@@ -18,36 +18,42 @@
     }
 
     // Canvas fingerprint: render text+shapes, hash pixel data
+    // Note: Firefox RFP (Resist Fingerprinting) randomizes canvas pixels.
+    // We detect this by rendering twice and comparing; if unstable, return ''.
     function getCanvasFingerprint() {
       try {
-        var canvas = document.createElement('canvas');
-        canvas.width = 240;
-        canvas.height = 60;
-        var ctx = canvas.getContext('2d');
-        if (!ctx) return '';
-        // Draw background gradient
-        var grad = ctx.createLinearGradient(0, 0, 240, 60);
-        grad.addColorStop(0, '#f60');
-        grad.addColorStop(1, '#06f');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 240, 60);
-        // Draw text with specific font settings
-        ctx.textBaseline = 'top';
-        ctx.font = '16px "Arial"';
-        ctx.fillStyle = '#fff';
-        ctx.fillText('RazReader fp test 📖', 4, 4);
-        ctx.font = '12px "Courier New"';
-        ctx.fillStyle = '#0f0';
-        ctx.fillText('CanvasFP v2.0', 4, 30);
-        // Draw a circle
-        ctx.beginPath();
-        ctx.arc(200, 30, 15, 0, Math.PI * 2);
-        ctx.strokeStyle = '#ff0';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-        // Hash the pixel data
-        var imageData = ctx.getImageData(0, 0, 240, 60).data;
-        return djb2Hash(String.fromCharCode.apply(null, imageData.subarray(0, 2400))).toString(16);
+        function renderOnce() {
+          var canvas = document.createElement('canvas');
+          canvas.width = 240;
+          canvas.height = 60;
+          var ctx = canvas.getContext('2d');
+          if (!ctx) return null;
+          var grad = ctx.createLinearGradient(0, 0, 240, 60);
+          grad.addColorStop(0, '#f60');
+          grad.addColorStop(1, '#06f');
+          ctx.fillStyle = grad;
+          ctx.fillRect(0, 0, 240, 60);
+          ctx.textBaseline = 'top';
+          ctx.font = '16px "Arial"';
+          ctx.fillStyle = '#fff';
+          ctx.fillText('RazReader fp test 📖', 4, 4);
+          ctx.font = '12px "Courier New"';
+          ctx.fillStyle = '#0f0';
+          ctx.fillText('CanvasFP v2.0', 4, 30);
+          ctx.beginPath();
+          ctx.arc(200, 30, 15, 0, Math.PI * 2);
+          ctx.strokeStyle = '#ff0';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          var imageData = ctx.getImageData(0, 0, 240, 60).data;
+          return djb2Hash(String.fromCharCode.apply(null, imageData.subarray(0, 2400))).toString(16);
+        }
+        var hash1 = renderOnce();
+        var hash2 = renderOnce();
+        if (!hash1 || !hash2) return '';
+        // If two renders produce different hashes, canvas is randomized (e.g. Firefox RFP)
+        if (hash1 !== hash2) return '';
+        return hash1;
       } catch (e) {
         return '';
       }
