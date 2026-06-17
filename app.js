@@ -1223,16 +1223,24 @@ document.addEventListener('error', function(e) {
               alert('文件格式不正确，请选择 RazReader 备份文件');
               return;
             }
+            if (!confirm('导入将覆盖当前所有数据，确定继续吗？')) return;
+            // Clear existing backup keys first
+            for (var c = 0; c < BACKUP_KEYS.length; c++) {
+              localStorage.removeItem(BACKUP_KEYS[c]);
+            }
+            // Import all keys from backup
             var imported = 0;
             for (var i = 0; i < BACKUP_KEYS.length; i++) {
               var key = BACKUP_KEYS[i];
-              if (data[key] !== undefined) {
+              if (data[key] !== undefined && data[key] !== null) {
                 localStorage.setItem(key, data[key]);
                 imported++;
               }
             }
-            alert('导入成功！共恢复 ' + imported + ' 项数据，页面将刷新');
-            location.reload();
+            // Close profile overlay before reload
+            hideProfileOverlay();
+            // Short delay to let UI update, then reload
+            setTimeout(function () { location.reload(); }, 100);
           } catch (err) {
             alert('导入失败: ' + err.message);
           }
