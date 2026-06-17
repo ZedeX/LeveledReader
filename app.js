@@ -1157,22 +1157,33 @@ document.addEventListener('error', function(e) {
       document.getElementById('initOverlay').classList.remove('open');
     }
     function doReset() {
-      // Clear all raz_* prefixed keys
-      var keysToRemove = [];
-      for (var i = 0; i < localStorage.length; i++) {
-        var k = localStorage.key(i);
-        if (k && (k.indexOf('raz_') === 0 || k.indexOf('quiz_') === 0)) {
-          keysToRemove.push(k);
+      try {
+        // Clear all raz_* and quiz_* prefixed keys
+        var keysToRemove = [];
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          if (k && (k.indexOf('raz_') === 0 || k.indexOf('quiz_') === 0)) {
+            keysToRemove.push(k);
+          }
         }
-      }
-      keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
+        keysToRemove.forEach(function (k) { localStorage.removeItem(k); });
+      } catch (e) {}
       // Clear Cache API
-      if (window.caches && CACHE_NAME) {
-        caches.delete(CACHE_NAME).catch(function () {});
-      }
-      if (bgPreloader) { bgPreloader.stop(); bgPreloader = null; }
-      if (bookPreloader) { bookPreloader.stop(); bookPreloader = null; }
-      hideInitConfirm();
+      try {
+        if (window.caches && CACHE_NAME) {
+          caches.delete(CACHE_NAME).catch(function () {});
+        }
+      } catch (e) {}
+      // Stop preloaders
+      try {
+        if (bgPreloader) { bgPreloader.stop(); bgPreloader = null; }
+      } catch (e) {}
+      try {
+        if (bookPreloader) { bookPreloader.stop(); bookPreloader = null; }
+      } catch (e) {}
+      // Close overlays and reload
+      try { hideInitConfirm(); } catch (e) {}
+      try { hideProfileOverlay(); } catch (e) {}
       location.reload();
     }
 
