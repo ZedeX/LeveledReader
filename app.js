@@ -18,6 +18,141 @@ var FALLBACK_BASES = [
   'https://github.com/ZedeX/LeveledReader/blob/main/downloads'
 ];
 
+// jsDelivr CDN mirror of the GitHub repo (works for raw file access, no rate limit, global CDN)
+// Format: https://cdn.jsdelivr.net/gh/USER/REPO@BRANCH/PATH
+var JSDELIVR_BASE = 'https://cdn.jsdelivr.net/gh/ZedeX/LeveledReader@main/downloads';
+
+// Track which fallback domains are fast/alive for racing strategy
+// Persisted in localStorage to remember across sessions
+var _domainStats = (function () {
+  try { return JSON.parse(localStorage.getItem('raz_domain_stats') || '{}'); }
+  catch (e) { return {}; }
+})();
+function _saveDomainStats() {
+  try { localStorage.setItem('raz_domain_stats', JSON.stringify(_domainStats)); } catch (e) { }
+}
+// Initialize stats for each base
+function _initDomainStat(key) {
+  if (!_domainStats[key]) _domainStats[key] = { wins: 0, fails: 0, avgMs: 0, lastCheck: 0, alive: true };
+}
+['kidsaz', 'zedex', 'github_pages', 'github_raw', 'github_blob', 'jsdelivr'].forEach(_initDomainStat);
+
+// Record a domain race result
+function recordDomainResult(key, success, durationMs) {
+  _initDomainStat(key);
+  var s = _domainStats[key];
+  if (success) {
+    s.wins++;
+    s.avgMs = s.avgMs === 0 ? durationMs : (s.avgMs * 0.7 + durationMs * 0.3);
+    s.alive = true;
+  } else {
+    s.fails++;
+    if (s.fails > 3) s.alive = false;
+  }
+  s.lastCheck = Date.now();
+  _saveDomainStats();
+}
+
+// Check if we're in peak hours (UTC+8 20:00-24:00 = UTC 12:00-16:00)
+function isPeakHour() {
+  var now = new Date();
+  var utcHour = now.getUTCHours();
+  if (utcHour >= 12 && utcHour < 16) return true; // UTC+8 20:00-24:00
+  var localHour = now.getHours();
+  if (localHour >= 20 || localHour < 0) return true; // Local 20:00-24:00 fallback
+  return false;
+}
+
+// Get the best fallback domain key for a given urlType
+// Returns ordered list of {key, url} to try (best first)
+function getRankedDomains(book, urlType, extraData) {
+  var candidates = [];
+  // Always include KidsA-Z CDN (mode 0) as primary unless in peak hour
+  var primaryUrl;
+  if (urlType === 'cover') primaryUrl = book.coverUrl;
+  else if (urlType === 'page') primaryUrl = 'https://mi.content.kidsa-z.com/readonly/' + book.id + '/projectable/large/1/book/page-' + extraData + '.jpg';
+  else if (urlType === 'audio') primaryUrl = extraData; // original audio url
+  if (primaryUrl) candidates.push({ key: 'kidsaz', url: primaryUrl });
+
+  // Build URLs for each fallback base
+  var bookPath = getGhBookPath(book);
+  var ext = JPG_COVER_IDS.indexOf(book.id) >= 0 ? '.jpg' : '.png';
+  for (var mode = 1; mode <= 4; mode++) {
+    var base = FALLBACK_BASES[mode];
+    var key = ['zedex', 'github_pages', 'github_raw', 'github_blob'][mode - 1];
+    var resource, url;
+    if (urlType === 'cover') {
+      resource = 'cover-' + book.id + ext;
+    } else if (urlType === 'page') {
+      var pn = extraData < 10 ? '0' + extraData : String(extraData);
+      resource = 'images/page-' + pn + '.jpg';
+    } else if (urlType === 'audio') {
+      var filename = extraData.split('/').pop();
+      resource = 'audio/' + filename;
+    }
+    if (mode === 4) {
+      url = base + '/' + decodeURIComponent(bookPath) + '/' + resource + '?raw=true';
+    } else {
+      url = base + '/' + bookPath + '/' + resource;
+    }
+    candidates.push({ key: key, url: url });
+  }
+  // Add jsDelivr (mode 5, derived from github path)
+  var jsResource;
+  if (urlType === 'cover') jsResource = 'cover-' + book.id + ext;
+  else if (urlType === 'page') {
+    var pn2 = extraData < 10 ? '0' + extraData : String(extraData);
+    jsResource = 'images/page-' + pn2 + '.jpg';
+  } else if (urlType === 'audio') {
+    jsResource = 'audio/' + extraData.split('/').pop();
+  }
+  candidates.push({ key: 'jsdelivr', url: JSDELIVR_BASE + '/' + decodeURIComponent(bookPath) + '/' + jsResource });
+
+  // Rank by stats: alive first, then by avgMs (faster first), then by wins
+  candidates.sort(function (a, b) {
+    var sa = _domainStats[a.key] || { alive: true, avgMs: 0, wins: 0 };
+    var sb = _domainStats[b.key] || { alive: true, avgMs: 0, wins: 0 };
+    if (sa.alive !== sb.alive) return sa.alive ? -1 : 1;
+    if (sa.avgMs > 0 && sb.avgMs > 0) return sa.avgMs - sb.avgMs;
+    if (sa.avgMs > 0) return -1;
+    if (sb.avgMs > 0) return 1;
+    return sb.wins - sa.wins;
+  });
+  return candidates;
+}
+
+// Race multiple URLs and return the first successful response (for fetch-based loading)
+// Used by Service Worker and background preloader for peak-hour acceleration
+function raceUrls(urls, timeoutMs) {
+  return new Promise(function (resolve, reject) {
+    if (!urls || urls.length === 0) { reject(new Error('no urls')); return; }
+    var settled = false;
+    var remaining = urls.length;
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function () {
+      if (!settled) { settled = true; controller.abort(); reject(new Error('timeout')); }
+    }, timeoutMs || 8000);
+    urls.forEach(function (u) {
+      fetch(u.url, { mode: 'no-cors', signal: controller.signal }).then(function (resp) {
+        if (settled) return;
+        recordDomainResult(u.key, true, 0); // duration approximated
+        settled = true;
+        clearTimeout(timeoutId);
+        controller.abort(); // cancel others
+        resolve({ url: u.url, key: u.key, resp: resp });
+      }).catch(function () {
+        recordDomainResult(u.key, false, 0);
+        remaining--;
+        if (remaining === 0 && !settled) {
+          settled = true;
+          clearTimeout(timeoutId);
+          reject(new Error('all failed'));
+        }
+      });
+    });
+  });
+}
+
 var JPG_COVER_IDS = [713]; // Book IDs whose cover is .jpg not .png
 
 function sanitizeBookTitle(title) {
@@ -503,7 +638,8 @@ document.addEventListener('error', function(e) {
     function BackgroundPreloader(books) {
       var self = this;
       self.books = books;
-      self.MAX_CONCURRENT = 3;
+      // Dynamic concurrency based on network conditions
+      self.MAX_CONCURRENT = detectOptimalConcurrency();
       self.activeCount = 0;
       self.paused = false;
       self.stopped = false;
@@ -521,6 +657,26 @@ document.addEventListener('error', function(e) {
       // Track what's been fetched (avoid re-fetching)
       self.fetchedUrls = new Set();
       self.cachedUrlsLoaded = false;
+      // Predicted next books (when user opens a book, preload adjacent ones)
+      self.predictedBooks = []; // array of book objects to prioritize
+      // Current level filter (for level-aware preloading)
+      self.currentLevel = '';
+    }
+
+    // Detect optimal concurrency based on network info and time of day
+    function detectOptimalConcurrency() {
+      var conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      var effectiveType = conn ? conn.effectiveType : '4g';
+      var downlink = conn ? (conn.downlink || 0) : 0; // Mbps
+      var peak = isPeakHour();
+
+      if (effectiveType === 'slow-2g' || effectiveType === '2g') return 1;
+      if (effectiveType === '3g') return peak ? 1 : 2;
+      if (downlink > 0 && downlink < 1.5) return 1; // < 1.5 Mbps
+      if (downlink > 0 && downlink < 5) return 2; // < 5 Mbps
+      // 4g+ with good bandwidth, but reduce during peak hours
+      if (peak) return 2;
+      return 3;
     }
 
     BackgroundPreloader.prototype.loadCachedUrls = async function () {
@@ -558,6 +714,40 @@ document.addEventListener('error', function(e) {
       }
     };
 
+    // Set current level for level-aware preloading
+    BackgroundPreloader.prototype.setLevel = function (level) {
+      this.currentLevel = level || '';
+    };
+
+    // Predict next books when user opens a book (preload adjacent books in same level)
+    BackgroundPreloader.prototype.predictFromBook = function (book) {
+      var self = this;
+      if (!book) return;
+      self.predictedBooks = [];
+      // Find books in the same level, sorted by current sort order
+      var sameLevel = self.books.filter(function (b) { return b.level === book.level; });
+      var idx = -1;
+      for (var i = 0; i < sameLevel.length; i++) {
+        if (sameLevel[i].id === book.id) { idx = i; break; }
+      }
+      // Predict next 2 books (user likely to read sequentially)
+      for (var j = 1; j <= 2 && idx + j < sameLevel.length; j++) {
+        self.predictedBooks.push(sameLevel[idx + j]);
+      }
+      // Add priority URLs: page 0 image + audio of predicted books
+      var priorityUrls = [];
+      self.predictedBooks.forEach(function (b) {
+        var imgUrls = buildImageUrls(b);
+        if (imgUrls[0]) priorityUrls.push(imgUrls[0]);
+        var aUrl = getAudioUrl(b.audioUrls, imgUrls, 0);
+        if (aUrl) {
+          var builtA = buildAudioUrl(b, aUrl);
+          if (builtA) priorityUrls.push(builtA);
+        }
+      });
+      if (priorityUrls.length > 0) self.addPriority(priorityUrls);
+    };
+
     // Add priority URLs (user needs these now)
     BackgroundPreloader.prototype.addPriority = function (urls) {
       var self = this;
@@ -591,8 +781,20 @@ document.addEventListener('error', function(e) {
 
     BackgroundPreloader.prototype._getNextBgUrl = function () {
       var self = this;
-      // Phase 1: covers
+      // Phase 1: covers (level-aware: prioritize current level first)
       if (self.phase === 'covers') {
+        // If a level is selected, prioritize covers of that level first
+        if (self.currentLevel && self.coverIdx === 0) {
+          for (var li = 0; li < self.books.length; li++) {
+            var lb = self.books[li];
+            if (lb.level !== self.currentLevel) continue;
+            var lcUrl = buildCoverUrl(lb);
+            if (lcUrl && !self.fetchedUrls.has(lcUrl)) {
+              // Mark this index as visited by tracking the URL
+              return lcUrl;
+            }
+          }
+        }
         while (self.coverIdx < self.books.length) {
           var book = self.books[self.coverIdx];
           self.coverIdx++;
@@ -660,18 +862,47 @@ document.addEventListener('error', function(e) {
     BackgroundPreloader.prototype._fetchUrl = function (url, isPriority) {
       var self = this;
       self.fetchedUrls.add(url);
+      // In peak hour, prefer jsDelivr/GitHub Pages over KidsA-Z CDN for background preload
+      // (only applies when url is a KidsA-Z CDN URL)
+      var fetchUrl = url;
+      if (isPeakHour() && url.indexOf('mi.content.kidsa-z.com') !== -1 && currentBook) {
+        // Try to find a jsDelivr equivalent for this URL
+        // This is a background preload, so we can use any equivalent URL
+        // Parse the URL to determine type
+        var pageMatch = url.match(/page-(\d+)\.jpg/);
+        if (pageMatch) {
+          var pageIdx = parseInt(pageMatch[1]);
+          var ranked = getRankedDomains(currentBook, 'page', pageIdx);
+          // Use the top-ranked non-kidsaz URL
+          for (var ri = 0; ri < ranked.length; ri++) {
+            if (ranked[ri].key !== 'kidsaz' && _domainStats[ranked[ri].key] && _domainStats[ranked[ri].key].alive) {
+              fetchUrl = ranked[ri].url;
+              break;
+            }
+          }
+        }
+      }
       // Try Cache API first
       if (cacheReady && window.caches) {
         caches.open(CACHE_NAME).then(function (cache) {
-          return cache.match(url).then(function (resp) {
+          return cache.match(fetchUrl).then(function (resp) {
             if (resp) {
               self._onFetchDone(url, isPriority);
               return;
             }
-            return cache.add(new Request(url, { mode: 'no-cors' })).then(function () {
+            return cache.add(new Request(fetchUrl, { mode: 'no-cors' })).then(function () {
               self._onFetchDone(url, isPriority);
             }).catch(function () {
-              self._onFetchDone(url, isPriority);
+              // Fallback to original URL if the alternate failed
+              if (fetchUrl !== url) {
+                cache.add(new Request(url, { mode: 'no-cors' })).then(function () {
+                  self._onFetchDone(url, isPriority);
+                }).catch(function () {
+                  self._onFetchDone(url, isPriority);
+                });
+              } else {
+                self._onFetchDone(url, isPriority);
+              }
             });
           });
         }).catch(function () {
@@ -679,19 +910,19 @@ document.addEventListener('error', function(e) {
         });
       } else {
         // Fallback: use Image/Audio fetch
-        if (url.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) {
+        if (fetchUrl.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) {
           var img = new Image();
           img.onload = img.onerror = function () { self._onFetchDone(url, isPriority); };
-          img.src = url;
-        } else if (url.match(/\.(mp3|m4a|ogg|wav)(\?|$)/i)) {
+          img.src = fetchUrl;
+        } else if (fetchUrl.match(/\.(mp3|m4a|ogg|wav)(\?|$)/i)) {
           var a = new Audio();
           a.preload = 'auto';
           a.oncanplaythrough = a.onerror = function () { self._onFetchDone(url, isPriority); };
-          a.src = url;
+          a.src = fetchUrl;
         } else {
           // Generic fetch
           if (typeof fetch === 'function') {
-            fetch(url, { mode: 'no-cors' }).catch(function () { }).then(function () { self._onFetchDone(url, isPriority); });
+            fetch(fetchUrl, { mode: 'no-cors' }).catch(function () { }).then(function () { self._onFetchDone(url, isPriority); });
           } else {
             self._onFetchDone(url, isPriority);
           }
@@ -717,16 +948,20 @@ document.addEventListener('error', function(e) {
       self.book = book;
       self.imageUrls = book.imageUrls || [];
       self.audioUrls = book.audioUrls || null;
-      self.MAX_CONCURRENT = 4;
+      self.MAX_CONCURRENT = Math.max(1, detectOptimalConcurrency()); // Same as bg, min 1
       self.activeCount = 0;
       self.stopped = false;
-      self.queue = []; // {type:'image'|'audio', url:string, pageIdx:number}
+      self.queue = []; // {type:'image'|'audio', url:string, pageIdx:number, controller?:AbortController}
       self.loadedPages = new Set();
-      // Build queue: all pages in order
+      self.activeRequests = []; // Track active fetches for cancellation
+      self.currentFocusPage = 0; // Page user is currently on; preload ahead of this
+      self.preloadWindow = 4; // Preload ±4 pages (audio priority within window)
+      // Build queue: audio first (higher priority), then image, interleaved
+      // Prioritize: page 0 audio, page 0 image, page 1 audio, page 1 image, ...
       for (var i = 0; i < self.imageUrls.length; i++) {
-        self.queue.push({ type: 'image', url: self.imageUrls[i], pageIdx: i });
         var aUrl = getAudioUrl(self.audioUrls, self.imageUrls, i);
         if (aUrl) self.queue.push({ type: 'audio', url: aUrl, pageIdx: i });
+        self.queue.push({ type: 'image', url: self.imageUrls[i], pageIdx: i });
       }
     }
 
@@ -737,7 +972,54 @@ document.addEventListener('error', function(e) {
     };
 
     BookPreloader.prototype.stop = function () {
-      this.stopped = true;
+      var self = this;
+      self.stopped = true;
+      // Cancel all active requests
+      for (var i = 0; i < self.activeRequests.length; i++) {
+        try { self.activeRequests[i].abort(); } catch (e) { }
+      }
+      self.activeRequests = [];
+      self.activeCount = 0;
+    };
+
+    // Reorder queue based on current page (audio priority, near pages first)
+    BookPreloader.prototype.focusPage = function (pageIdx) {
+      var self = this;
+      self.currentFocusPage = pageIdx;
+      if (self.stopped) return;
+      // Cancel active requests that are far from current page (>preloadWindow)
+      var newActive = [];
+      for (var i = 0; i < self.activeRequests.length; i++) {
+        var req = self.activeRequests[i];
+        if (req._pageIdx !== undefined && Math.abs(req._pageIdx - pageIdx) > self.preloadWindow + 1) {
+          try { req.abort(); } catch (e) { }
+          // Decrement activeCount since we cancelled this one
+          self.activeCount--;
+          // Mark as not loaded so it can be re-queued later
+          if (req._item) self.loadedPages.delete(req._item.pageIdx + '_' + req._item.type);
+        } else {
+          newActive.push(req);
+        }
+      }
+      self.activeRequests = newActive;
+      // Re-sort queue: by distance from current page, audio before image
+      self.queue.sort(function (a, b) {
+        var distA = Math.abs(a.pageIdx - pageIdx);
+        var distB = Math.abs(b.pageIdx - pageIdx);
+        if (distA !== distB) return distA - distB;
+        // Same distance: audio first
+        if (a.type === 'audio' && b.type === 'image') return -1;
+        if (a.type === 'image' && b.type === 'audio') return 1;
+        return 0;
+      });
+      // Filter queue to only keep items within preload window (ahead of current page)
+      // Keep current page and next preloadWindow pages; also keep previous 1 page for back-nav
+      self.queue = self.queue.filter(function (item) {
+        var dist = item.pageIdx - pageIdx;
+        // Keep items from -1 to +preloadWindow
+        return dist >= -1 && dist <= self.preloadWindow;
+      });
+      self._next();
     };
 
     BookPreloader.prototype._next = function () {
@@ -746,6 +1028,9 @@ document.addEventListener('error', function(e) {
       while (self.activeCount < self.MAX_CONCURRENT && self.queue.length > 0) {
         var item = self.queue.shift();
         if (self.loadedPages.has(item.pageIdx + '_' + item.type)) continue;
+        // Skip items outside preload window (in case queue wasn't filtered)
+        var dist = item.pageIdx - self.currentFocusPage;
+        if (dist < -1 || dist > self.preloadWindow) continue;
         self.loadedPages.add(item.pageIdx + '_' + item.type);
         self.activeCount++;
         self._fetch(item);
@@ -754,44 +1039,86 @@ document.addEventListener('error', function(e) {
 
     BookPreloader.prototype._fetch = function (item) {
       var self = this;
-      // Pause background preloader while book preloader is active
-      if (bgPreloader) bgPreloader.pause();
+      // Stop background preloader while book preloader is active (saves bandwidth)
+      if (bgPreloader && !bgPreloader.stopped) bgPreloader.stop();
+      var controller = new AbortController();
+      controller._item = item;
+      controller._pageIdx = item.pageIdx;
+      self.activeRequests.push(controller);
       if (cacheReady && window.caches) {
         caches.open(CACHE_NAME).then(function (cache) {
+          if (controller.signal.aborted) { self._done(item, false); return; }
           return cache.match(item.url).then(function (resp) {
+            if (controller.signal.aborted) { self._done(item, false); return; }
             if (resp) {
-              self._done(item);
+              self._done(item, true);
               return;
             }
-            return cache.add(new Request(item.url, { mode: 'no-cors' })).then(function () {
-              self._done(item);
-            }).catch(function () {
-              self._done(item);
+            return cache.add(new Request(item.url, { mode: 'no-cors', signal: controller.signal })).then(function () {
+              self._done(item, true);
+            }).catch(function (err) {
+              if (err && err.name === 'AbortError') return; // Don't call _done for aborted
+              self._done(item, false);
             });
           });
         }).catch(function () {
-          self._done(item);
+          self._done(item, false);
         });
       } else {
         if (item.type === 'image') {
           var img = new Image();
-          img.onload = img.onerror = function () { self._done(item); };
+          img.onload = function () { self._done(item, true, img); };
+          img.onerror = function () { self._done(item, false); };
           img.src = item.url;
+          // Track for cancellation by setting src to '' on abort
+          controller._img = img;
+          controller.abort = (function (origAbort) {
+            return function () {
+              try { img.src = ''; } catch (e) { }
+              origAbort.call(this);
+            };
+          })(controller.abort.bind(controller));
         } else {
           var a = new Audio();
           a.preload = 'auto';
-          a.oncanplaythrough = a.onerror = function () { self._done(item); };
+          a.oncanplaythrough = function () { self._done(item, true, a); };
+          a.onerror = function () { self._done(item, false); };
           a.src = item.url;
+          controller._audio = a;
+          controller.abort = (function (origAbort) {
+            return function () {
+              try { a.pause(); a.removeAttribute('src'); a.load(); } catch (e) { }
+              origAbort.call(this);
+            };
+          })(controller.abort.bind(controller));
         }
       }
     };
 
-    BookPreloader.prototype._done = function (item) {
+    BookPreloader.prototype._done = function (item, success, instance) {
       var self = this;
       self.activeCount--;
+      // Remove from activeRequests
+      for (var i = 0; i < self.activeRequests.length; i++) {
+        if (self.activeRequests[i]._item === item) {
+          self.activeRequests.splice(i, 1);
+          break;
+        }
+      }
+      // Store loaded instance for reuse by the player
+      if (success && instance) {
+        if (item.type === 'image') {
+          preloadedImages[item.pageIdx] = instance;
+        } else if (item.type === 'audio') {
+          preloadedAudios[item.pageIdx] = instance;
+        }
+      }
       if (self.queue.length === 0 && self.activeCount === 0) {
-        // Book preloader finished, resume background preloader
-        if (bgPreloader) bgPreloader.resume();
+        // Book preloader finished, restart background preloader
+        if (bgPreloader && bgPreloader.stopped) {
+          bgPreloader.stopped = false;
+          bgPreloader.start();
+        }
       }
       self._next();
     };
@@ -1446,10 +1773,13 @@ document.addEventListener('error', function(e) {
       // Update URL hash
       updateHash();
       // Prioritize covers for the selected level
-      if (bgPreloader && level) {
-        var urls = [];
-        filteredBooks.forEach(function (b) { var cu = buildCoverUrl(b); if (cu) urls.push(cu); });
-        bgPreloader.addPriority(urls);
+      if (bgPreloader) {
+        bgPreloader.setLevel(level);
+        if (level) {
+          var urls = [];
+          filteredBooks.forEach(function (b) { var cu = buildCoverUrl(b); if (cu) urls.push(cu); });
+          bgPreloader.addPriority(urls);
+        }
       }
     }
 
@@ -1550,6 +1880,8 @@ document.addEventListener('error', function(e) {
       if (bookPreloader) bookPreloader.stop();
       bookPreloader = new BookPreloader(currentBook);
       bookPreloader.start();
+      // Predict and preload next books in the same level (idle bandwidth utilization)
+      if (bgPreloader) bgPreloader.predictFromBook(book);
       updateHash();
     }
 
@@ -1598,9 +1930,9 @@ document.addEventListener('error', function(e) {
           nextBtns[bi].style.background = '';
         }
       }
-      // Stop book preloader and resume background preloader
+      // Stop book preloader and restart background preloader
       if (bookPreloader) { bookPreloader.stop(); bookPreloader = null; }
-      if (bgPreloader) bgPreloader.resume();
+      if (bgPreloader && bgPreloader.stopped) { bgPreloader.stopped = false; bgPreloader.start(); }
       currentBook = null;
       location.hash = '';
     }
@@ -1628,6 +1960,7 @@ document.addEventListener('error', function(e) {
     function loadPageImages(centerPage) {
       var container = document.getElementById('readerScroll');
       var slides = container.children;
+      var peak = isPeakHour();
       // Load current page and ±2 neighbors
       for (var i = 0; i < slides.length; i++) {
         var slide = slides[i];
@@ -1638,34 +1971,102 @@ document.addEventListener('error', function(e) {
           var imgUrl = currentBook.imageUrls[i];
           if (!imgUrl) continue;
           if (img.src && !img.src.endsWith('about:blank') && img.dataset.loaded === '1') continue;
-          if (preloadedImages[i] && preloadedImages[i].complete) {
-            img.src = preloadedImages[i].src || imgUrl;
+          // Check preloaded image first
+          if (preloadedImages[i] && preloadedImages[i].complete && preloadedImages[i].naturalWidth > 0) {
+            img.src = preloadedImages[i].src;
             img.style.opacity = '1';
             img.dataset.loaded = '1';
           } else if (!img.src || img.src.endsWith('about:blank') || img.src === '') {
-            img.src = imgUrl;
+            // Show skeleton loading
             img.style.opacity = '0.3';
             img.dataset.loaded = '0';
-            (function (imgEl, url, pageIdx) {
-              var newImg = new Image();
-              newImg.onload = function () {
-                if (imgEl) {
-                  imgEl.src = newImg.src;
+            slide.classList.add('loading');
+            // In peak hour, race top 2-3 domains for faster load
+            if (peak && cacheReady && window.fetch) {
+              (function (imgEl, pageIdx, slideEl) {
+                var settled = false;
+                var candidates = getRankedDomains(currentBook, 'page', pageIdx).slice(0, 3);
+                // Set primary URL first for immediate display if it wins
+                imgEl.src = candidates[0].url;
+                // Race fetch to find fastest; if a non-primary wins, swap src
+                candidates.forEach(function (c) {
+                  var startT = Date.now();
+                  fetch(c.url, { mode: 'no-cors' }).then(function (resp) {
+                    if (settled) return;
+                    settled = true;
+                    recordDomainResult(c.key, true, Date.now() - startT);
+                    // If the winner isn't the currently-loading URL, swap
+                    if (imgEl.src !== c.url && imgEl.dataset.loaded === '0') {
+                      imgEl.src = c.url;
+                    }
+                  }).catch(function () {
+                    recordDomainResult(c.key, false, 0);
+                  });
+                });
+                // Fallback timeout: if still not loaded after 8s, try fallback chain
+                var timeoutTimer = setTimeout(function () {
+                  if (imgEl.dataset.loaded === '0') {
+                    var nextUrl = tryNextFallback(imgEl, currentBook, imgEl.src, 'page', pageIdx);
+                    if (nextUrl) imgEl.src = nextUrl;
+                  }
+                }, 8000);
+                imgEl.onload = function () {
+                  clearTimeout(timeoutTimer);
                   imgEl.style.opacity = '1';
                   imgEl.dataset.loaded = '1';
-                }
-              };
-              newImg.onerror = function () {
-                if (imgEl) imgEl.style.opacity = '1';
-              };
-              newImg.src = url;
-            })(img, imgUrl, i);
+                  slideEl.classList.remove('loading');
+                };
+                imgEl.onerror = function () {
+                  clearTimeout(timeoutTimer);
+                  var nextUrl = tryNextFallback(imgEl, currentBook, imgEl.src, 'page', pageIdx);
+                  if (nextUrl) imgEl.src = nextUrl;
+                  else { imgEl.style.opacity = '1'; slideEl.classList.remove('loading'); }
+                };
+              })(img, i, slide);
+            } else {
+              // Non-peak: original strategy with 15s timeout
+              img.src = imgUrl;
+              (function (imgEl, url, pageIdx, slideEl) {
+                var timedOut = false;
+                var timeoutTimer = setTimeout(function () {
+                  if (imgEl.dataset.loaded === '0') {
+                    timedOut = true;
+                    // Try fallback URL
+                    var nextUrl = tryNextFallback(imgEl, currentBook, url, 'page', pageIdx);
+                    if (nextUrl) {
+                      imgEl.src = nextUrl;
+                    }
+                  }
+                }, 15000); // 15s timeout
+                imgEl.onload = function () {
+                  clearTimeout(timeoutTimer);
+                  imgEl.style.opacity = '1';
+                  imgEl.dataset.loaded = '1';
+                  slideEl.classList.remove('loading');
+                };
+                imgEl.onerror = function () {
+                  clearTimeout(timeoutTimer);
+                  if (!timedOut) {
+                    // Try fallback on error immediately
+                    var nextUrl = tryNextFallback(imgEl, currentBook, url, 'page', pageIdx);
+                    if (nextUrl) {
+                      timedOut = true;
+                      imgEl.src = nextUrl;
+                    } else {
+                      imgEl.style.opacity = '1';
+                      slideEl.classList.remove('loading');
+                    }
+                  }
+                };
+              })(img, imgUrl, i, slide);
+            }
           }
         } else if (dist > 3) {
           // Unload distant pages to save memory
           if (img.src && !img.src.endsWith('about:blank')) {
             img.src = '';
             img.dataset.loaded = '0';
+            slide.classList.remove('loading');
           }
         }
       }
@@ -1697,6 +2098,8 @@ document.addEventListener('error', function(e) {
         setTimeout(function () { scrollProgrammatic = false; }, 300);
       }
       loadPageImages(currentPage);
+      // Notify book preloader to refocus on current page (re-prioritize audio ahead)
+      if (bookPreloader) bookPreloader.focusPage(currentPage);
 
       document.getElementById('pageInfo').textContent = (currentPage + 1) + ' / ' + totalPages;
       document.getElementById('progressFill').style.width = ((currentPage + 1) / totalPages * 100) + '%';
@@ -1824,7 +2227,27 @@ document.addEventListener('error', function(e) {
       audioEl.addEventListener('ended', function () {
         if (audioLoadId !== myLoadId) return;
         document.getElementById('playBtn').textContent = '▶️';
-        if (autoPlay) { clearTimeout(autoPageTimer); autoPageTimer = setTimeout(nextPage, 1500); }
+        if (autoPlay) {
+          clearTimeout(autoPageTimer);
+          // Check if next page audio is ready before advancing
+          var nextIdx = currentPage + 1;
+          if (nextIdx < totalPages) {
+            var nextAudioReady = preloadedAudios[nextIdx] && preloadedAudios[nextIdx].readyState >= 2;
+            var nextHasAudio = hasAudio(currentBook.audioUrls, currentBook.imageUrls, nextIdx);
+            if (nextHasAudio && !nextAudioReady) {
+              // Show loading indicator, wait for canplay
+              document.getElementById('playBtn').textContent = '⏳';
+              autoPageTimer = setTimeout(function() {
+                // Re-check after delay, advance anyway after 5s max
+                nextPage();
+              }, 5000);
+            } else {
+              autoPageTimer = setTimeout(nextPage, 1500);
+            }
+          } else {
+            autoPageTimer = setTimeout(nextPage, 1500);
+          }
+        }
       });
       document.getElementById('playBtn').textContent = '▶️';
       if (autoPlay) {
