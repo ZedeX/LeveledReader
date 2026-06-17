@@ -329,41 +329,6 @@
       return buildFingerprintString(params);
     }
 
-    function checkAccess() {
-      var saved = localStorage.getItem(AK_KEY);
-      if (!saved) {
-        showKeyOverlay();
-        return false;
-      }
-      try {
-        var data = JSON.parse(saved);
-        // If already verified and fingerprint matches, allow access
-        if (data.verified && data.fingerprint === getDeviceFingerprint()) {
-          // Already authenticated
-        } else {
-          // Need to re-verify with time window
-          var dc = validateKeyWithTimeWindow(data.key);
-          if (!dc) {
-            showKeyOverlay();
-            return false;
-          }
-          // Update stored data with verification flag
-          data.verified = true;
-          data.fingerprint = getDeviceFingerprint();
-          localStorage.setItem(AK_KEY, JSON.stringify(data));
-        }
-      } catch (e) {
-        showKeyOverlay();
-        return false;
-      }
-      var name = localStorage.getItem(UN_KEY);
-      if (!name) {
-        showNameOverlay();
-        return false;
-      }
-      return true;
-    }
-
 
     // ========== Early Access Check ==========
     // Run verification immediately - don't wait for DATA
