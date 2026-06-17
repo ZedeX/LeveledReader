@@ -974,12 +974,13 @@ document.addEventListener('error', function(e) {
       // ===== NEW: Quiz volume achievements =====
       var quizResults = getQuizResults();
       var quizTaken = Object.keys(quizResults).filter(function (k) { return quizResults[k] && quizResults[k].submitted; }).length;
+      var totalQuizCount = Object.keys(QUIZ_DATA || {}).length || 760;
       var quizVolDefs = [
-        { key: 'quiz_vol_10', threshold: 10, name: 'Quiz参与者', icon: '📝', color: '#795548' },
+        { key: 'quiz_vol_10', threshold: 10, name: 'Quiz参与者', icon: '✍️', color: '#795548' },
         { key: 'quiz_vol_25', threshold: 25, name: 'Quiz常客', icon: '✏️', color: '#607D8B' },
         { key: 'quiz_vol_50', threshold: 50, name: 'Quiz爱好者', icon: '📋', color: '#009688' },
         { key: 'quiz_vol_100', threshold: 100, name: 'Quiz狂人', icon: '📊', color: '#673AB7' },
-        { key: 'quiz_vol_all', threshold: 760, name: 'Quiz全勤', icon: '🏅', color: '#D50000' }
+        { key: 'quiz_vol_all', threshold: totalQuizCount, name: 'Quiz全勤', icon: '🎓', color: '#D50000' }
       ];
       for (var vi = 0; vi < quizVolDefs.length; vi++) {
         var vd = quizVolDefs[vi];
@@ -1028,7 +1029,7 @@ document.addEventListener('error', function(e) {
         ach['early_bird'] = { date: new Date().toISOString(), name: '早起鸟儿', icon: '🌅', color: '#FF9800' };
         newAch.push('早起鸟儿');
       }
-      if (hour >= 21 && !ach['night_owl']) {
+      if ((hour >= 21 || hour < 6) && !ach['night_owl']) {
         ach['night_owl'] = { date: new Date().toISOString(), name: '夜猫子', icon: '🦉', color: '#3F51B5' };
         newAch.push('夜猫子');
       }
@@ -1119,13 +1120,21 @@ document.addEventListener('error', function(e) {
       }
       return streak;
     }
+    var _achToastIndex = 0;
     function showAchToast(name) {
       var toast = document.createElement('div');
       toast.className = 'ach-toast';
       toast.innerHTML = '🎉 解锁成就：' + name;
+      // Stack toasts vertically to avoid overlap
+      var offset = _achToastIndex * 56;
+      toast.style.top = (70 + offset) + 'px';
+      _achToastIndex++;
       document.body.appendChild(toast);
       playAchSound();
-      setTimeout(function () { if (toast.parentNode) toast.parentNode.removeChild(toast); }, 3500);
+      setTimeout(function () {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+        _achToastIndex = Math.max(0, _achToastIndex - 1);
+      }, 3500);
     }
 
     // Delayed achievement display queue
@@ -1133,6 +1142,7 @@ document.addEventListener('error', function(e) {
     var _achTimer = null;
     function flushAchQueue() {
       _achTimer = null;
+      _achToastIndex = 0; // Reset stack index for new batch
       for (var i = 0; i < _achQueue.length; i++) {
         showAchToast(_achQueue[i]);
       }
@@ -1745,12 +1755,6 @@ document.addEventListener('error', function(e) {
       }
     }
 
-    function toggleAudio() {
-      if (!audioEl) return;
-      if (audioEl.paused) { audioEl.play().catch(function () { }); document.getElementById('playBtn').textContent = '⏸'; }
-      else { audioEl.pause(); document.getElementById('playBtn').textContent = '▶️'; }
-    }
-
     function stopAudio() {
       if (audioEl) {
         audioEl.pause();
@@ -2086,7 +2090,8 @@ document.addEventListener('error', function(e) {
         submitted: true,
         perfectScore: perfect,
         correct: correct,
-        total: quizState.questions.length
+        total: quizState.questions.length,
+        date: new Date().toISOString()
       };
       saveQuizResults(results);
 
@@ -2131,7 +2136,8 @@ document.addEventListener('error', function(e) {
         submitted: true,
         perfectScore: perfect,
         correct: correct,
-        total: quizState.questions.length
+        total: quizState.questions.length,
+        date: new Date().toISOString()
       };
       saveQuizResults(results);
 
@@ -2319,8 +2325,9 @@ document.addEventListener('error', function(e) {
       ]);
 
       // Lifetime achievement
+      var totalBooksCount = (DATA && DATA.books) ? DATA.books.length : 796;
       html += achGrid('🏅 终极成就', [
-        { key: 'lifetime_all', name: '全部读完！', icon: '🏅', color: '#D50000', desc: '读完全部796本书' }
+        { key: 'lifetime_all', name: '全部读完！', icon: '🏅', color: '#D50000', desc: '读完全部' + totalBooksCount + '本书' }
       ]);
 
       // Reset section
