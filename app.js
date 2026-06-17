@@ -1176,6 +1176,72 @@ document.addEventListener('error', function(e) {
       location.reload();
     }
 
+    // ========== Backup / Restore ==========
+    var BACKUP_KEYS = [
+      'raz_access_key', 'raz_user_name', 'raz_reading_status',
+      'raz_achievements', 'raz_daily_reads', 'raz_theme',
+      'quiz_results', 'quiz_perfect'
+    ];
+
+    function exportUserData() {
+      try {
+        var data = { _version: 1, _exportDate: new Date().toISOString(), _app: 'RazReader' };
+        for (var i = 0; i < BACKUP_KEYS.length; i++) {
+          var key = BACKUP_KEYS[i];
+          var val = localStorage.getItem(key);
+          if (val !== null) data[key] = val;
+        }
+        var json = JSON.stringify(data, null, 2);
+        var blob = new Blob([json], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var name = localStorage.getItem('raz_user_name') || 'user';
+        var dateStr = new Date().toISOString().slice(0, 10);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'raz-backup-' + name + '-' + dateStr + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        alert('导出失败: ' + e.message);
+      }
+    }
+
+    function importUserData() {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.json,application/json';
+      input.onchange = function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          try {
+            var data = JSON.parse(ev.target.result);
+            if (data._app !== 'RazReader') {
+              alert('文件格式不正确，请选择 RazReader 备份文件');
+              return;
+            }
+            var imported = 0;
+            for (var i = 0; i < BACKUP_KEYS.length; i++) {
+              var key = BACKUP_KEYS[i];
+              if (data[key] !== undefined) {
+                localStorage.setItem(key, data[key]);
+                imported++;
+              }
+            }
+            alert('导入成功！共恢复 ' + imported + ' 项数据，页面将刷新');
+            location.reload();
+          } catch (err) {
+            alert('导入失败: ' + err.message);
+          }
+        };
+        reader.readAsText(file);
+      };
+      input.click();
+    }
+
     // ========== Audio Pause/Play via Space & Click ==========
     function togglePlayPause() {
       if (!audioEl) return;
@@ -2330,8 +2396,18 @@ document.addEventListener('error', function(e) {
         { key: 'lifetime_all', name: '全部读完！', icon: '🏅', color: '#D50000', desc: '读完全部' + totalBooksCount + '本书' }
       ]);
 
+      // Backup/Restore section
+      html += '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">';
+      html += '<div style="font-size:13px;font-weight:600;color:var(--text1);margin-bottom:8px">数据备份</div>';
+      html += '<div style="display:flex;gap:8px">';
+      html += '<button onclick="exportUserData()" style="flex:1;background:var(--primary);color:#fff;border:none;padding:10px;border-radius:8px;font-size:13px;cursor:pointer">导出备份</button>';
+      html += '<button onclick="importUserData()" style="flex:1;background:none;border:1px solid var(--primary);color:var(--primary);padding:10px;border-radius:8px;font-size:13px;cursor:pointer">导入备份</button>';
+      html += '</div>';
+      html += '<div style="font-size:11px;color:var(--text2);margin-top:4px;text-align:center">备份包含用户名、密钥、阅读记录、成就、Quiz数据</div>';
+      html += '</div>';
+
       // Reset section
-      html += '<div style="margin-top:32px;padding-top:16px;border-top:1px solid var(--border)">';
+      html += '<div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">';
       html += '<button onclick="showInitConfirm()" style="background:none;border:1px solid #D32F2F;color:#D32F2F;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;width:100%">重置阅读器</button>';
       html += '<div style="font-size:11px;color:var(--text2);margin-top:4px;text-align:center">清空所有阅读记录、成就和密钥</div>';
       html += '</div>';
