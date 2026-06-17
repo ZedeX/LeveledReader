@@ -200,6 +200,16 @@
 <script src="book-data.js"></script>
 <script src="quiz-data.min.js"></script>
 <script src="app.js"></script>
+<script>
+  // Register Service Worker for offline caching
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register('sw.js').catch(function (e) {
+        console.log('SW registration failed:', e);
+      });
+    });
+  }
+</script>
 </body>
 
 </html>
